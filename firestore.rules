@@ -64,7 +64,11 @@ service cloud.firestore {
             && request.resource.data.goalsA is number
             && request.resource.data.goalsB is number
             && (!('eloDelta' in request.resource.data) || request.resource.data.eloDelta is number)
-            && request.resource.data.timestamp == request.time; // Enforce server timestamp
+            && request.resource.data.timestamp == request.time
+            // Optional tournament fields
+            && (!('tournamentId' in request.resource.data) || request.resource.data.tournamentId is string)
+            && (!('tournamentGameId' in request.resource.data) || request.resource.data.tournamentGameId is string)
+            && (!('tournamentGameName' in request.resource.data) || request.resource.data.tournamentGameName is string);
 
       // Allow vibration metadata updates OR match edits (with audit trail)
       allow update: if canAccess()
@@ -112,6 +116,29 @@ service cloud.firestore {
     match /users/{userId} {
       allow get, create, update: if canAccess() && request.auth.uid == userId;
       allow list: if false;
+    }
+
+    // --- Rules for the 'tournaments' collection ---
+    match /tournaments/{tournamentId} {
+
+      // READ: Anyone using the app can read tournament data.
+      allow get, list: if canAccess();
+
+      // CREATE: Any signed-in user can create a tournament in setup state.
+      allow create: if canAccess()
+            && request.resource.data.name is string
+            && request.resource.data.state == 'setup'
+            && request.resource.data.teams is list;
+
+      // UPDATE: Any signed-in user can update tournaments.
+      // State transitions and game results are validated client-side.
+      allow update: if canAccess()
+            && request.resource.data.name is string
+            && request.resource.data.state is string
+            && request.resource.data.state in ['setup', 'locked', 'in_progress', 'completed', 'deleted'];
+
+      // Tournaments cannot be hard-deleted.
+      allow delete: if false;
     }
   }
 }
