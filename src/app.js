@@ -13,6 +13,7 @@ import { PAUSE_DATES, PAUSE_MESSAGE, PAUSE_IMAGE_PATH } from './constants.js';
 import { getSelectedSeason } from './season-service.js';
 import { initializeNotifications } from './notification-service.js';
 import { initializeActivityHeatmap } from './activity-heatmap.js';
+import { initializeTournamentUI } from './tournament/tournament-ui.js';
 
 import { auth } from './firebase-service.js';
 import { onAuthStateChanged, signInWithEmailAndPassword, setPersistence, browserLocalPersistence, signOut } from 'firebase/auth';
@@ -78,6 +79,7 @@ function goOnline() {
     initializeActivityHeatmap();
     initializePlayerManager();
     initializeNotifications();
+    initializeTournamentUI();
 }
 
 /**

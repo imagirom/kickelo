@@ -21,6 +21,7 @@ import { allMatches } from './match-data-service.js';
 import { computeAllPlayerStats } from './player-stats-batch.js';
 import { getStatusBadges } from './leaderboard-display.js';
 import { createTimelineWithLabel } from './match-timeline.js';
+import { getActiveTournamentGame, clearActiveTournamentGame, completeTournamentMatch } from './tournament/tournament-ui.js';
 
 /**
  * Compute the emoji/badge diff between the current state and after adding a new match.
@@ -361,6 +362,14 @@ export function setupMatchForm() {
                 ...(liveMode && goalLog.length > 0 ? { goalLog: goalLog.slice(), matchDuration: Date.now() - matchStartTime } : {})
             };
 
+            // Add tournament fields if playing a tournament game
+            const tournamentGame = getActiveTournamentGame();
+            if (tournamentGame) {
+                matchData.tournamentId = tournamentGame.tournamentId;
+                matchData.tournamentGameId = tournamentGame.gameId;
+                matchData.tournamentGameName = tournamentGame.gameName;
+            }
+
             // 2. Add match to Firestore first
             const matchDocRef = await addDoc(matchesColRef, matchData);
             clearLastSuggestion();
@@ -390,6 +399,13 @@ export function setupMatchForm() {
             }
 
             showToast("Match submitted!", 'success');
+
+            // Complete tournament game if in tournament mode
+            if (tournamentGame) {
+                await completeTournamentMatch(matchDocRef.id, parsedGoalsA, parsedGoalsB, winner);
+                window.dispatchEvent(new Event('tournament-game-submitted'));
+            }
+
             resetMatchForm();
             setLiveMode(false, true); // Reset to final score mode after submit
             stopLiveMatchTimer(); // Stop timer after submit
@@ -415,6 +431,7 @@ export function resetMatchForm() {
     if (rankedMatchCheckbox) {
         rankedMatchCheckbox.checked = true;
     }
+    removeTournamentBanner();
 }
 
 const swapRedTeamHitbox = document.getElementById("swap_red_team_hitbox")
@@ -945,3 +962,75 @@ export function notifyRolesChanged(team = null) {
     handleRoleSelectionChange('A');
     handleRoleSelectionChange('B');
 }
+
+// =========================================================================
+// Tournament Game Pre-fill
+// =========================================================================
+
+let tournamentBannerEl = null;
+
+window.addEventListener('tournament-game-selected', (e) => {
+    const { tournamentName, gameName, team0, team1 } = e.detail;
+
+    // Pre-fill players: team0 → teamA (red), team1 → teamB (blue)
+    if (team0?.players) {
+        teamA1Select.value = team0.players[0] || '';
+        teamA2Select.value = team0.players.length > 1 ? team0.players[1] : '';
+    }
+    if (team1?.players) {
+        teamB1Select.value = team1.players[0] || '';
+        teamB2Select.value = team1.players.length > 1 ? team1.players[1] : '';
+    }
+
+    // Reset scores
+    teamAgoalsInput.value = '0';
+    teamBgoalsInput.value = '0';
+
+    // Show tournament banner
+    showTournamentBanner(tournamentName, gameName);
+
+    // Notify roles changed
+    notifyRolesChanged();
+});
+
+function showTournamentBanner(tournamentName, gameName) {
+    removeTournamentBanner();
+    const matchForm = document.getElementById('matchForm');
+    if (!matchForm) return;
+
+    tournamentBannerEl = document.createElement('div');
+    tournamentBannerEl.className = 'tournament-match-banner';
+    tournamentBannerEl.innerHTML = `
+        <div class="banner-title">🏆 ${escapeFormHtml(tournamentName)}</div>
+        <div class="banner-game">${escapeFormHtml(gameName)}</div>
+        <button class="banner-cancel" id="tournamentCancelBtn">✕ Cancel</button>
+    `;
+    matchForm.insertBefore(tournamentBannerEl, matchForm.firstChild);
+
+    tournamentBannerEl.querySelector('#tournamentCancelBtn')?.addEventListener('click', () => {
+        clearActiveTournamentGame();
+        removeTournamentBanner();
+        resetMatchForm();
+    });
+}
+
+function removeTournamentBanner() {
+    if (tournamentBannerEl && tournamentBannerEl.parentElement) {
+        tournamentBannerEl.parentElement.removeChild(tournamentBannerEl);
+    }
+    tournamentBannerEl = null;
+}
+
+function escapeFormHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+// Clean up banner on form reset
+const _originalResetMatchForm = resetMatchForm;
+// Extend resetMatchForm via event
+window.addEventListener('tournament-game-submitted', () => {
+    removeTournamentBanner();
+});
