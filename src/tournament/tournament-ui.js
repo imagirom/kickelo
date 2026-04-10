@@ -4,7 +4,7 @@ import {
   initializeTournamentsData, getVisibleTournaments, getTournamentById,
   createTournament, addTeam, removeTeam, updateTeamName,
   updateTournamentConfig, lockTournament, submitTournamentGameResult,
-  generateNextSwissRound, softDeleteTournament,
+  generateNextSwissRound, softDeleteTournament, cloneTournament,
 } from './tournament-service.js';
 import {
   getReadyGames, getNextDefaultGame, getGameById,
@@ -12,6 +12,7 @@ import {
   generateTeamName,
 } from './tournament-engine.js';
 import { allMatches } from '../match-data-service.js';
+import { showToast, showConfirm } from '../toast.js';
 
 let currentView = 'list'; // 'list' | 'detail'
 let selectedTournamentId = null;
@@ -147,7 +148,7 @@ function renderList() {
       // Will re-render on snapshot update
     } catch (err) {
       console.error('Failed to create tournament:', err);
-      alert('Error: ' + err.message);
+      showToast('Error: ' + err.message, 'error');
     }
     confirmBtn.disabled = false;
   });
@@ -212,13 +213,14 @@ function renderDetail() {
 
   // Delete button
   container.querySelector('#tournamentDeleteBtn')?.addEventListener('click', async () => {
-    if (!confirm(`Delete tournament "${t.name}"? It will be hidden from view.`)) return;
+    const confirmed = await showConfirm(`Delete tournament "${t.name}"? It will be hidden from view.`, { type: 'warning', confirmLabel: '🗑 Delete' });
+    if (!confirmed) return;
     try {
       await softDeleteTournament(t.id);
       currentView = 'list';
       selectedTournamentId = null;
     } catch (err) {
-      alert('Error: ' + err.message);
+      showToast('Error: ' + err.message, 'error');
     }
   });
 
@@ -227,6 +229,8 @@ function renderDetail() {
     bindSetupEvents(t);
   } else if (t.state === 'in_progress') {
     bindInProgressEvents(t);
+  } else if (t.state === 'completed') {
+    bindCompletedEvents(t);
   }
 
   // Bracket tab switching (DE)
@@ -307,28 +311,47 @@ function bindSetupEvents(t) {
   populatePlayerSelect(sel1, playerNames);
   populatePlayerSelect(sel2, playerNames, true);
 
-  // Add team
+  // Add team (with duplicate player check)
   container.querySelector('#addTeamBtn')?.addEventListener('click', async () => {
     const p1 = sel1.value;
     const p2 = sel2.value;
     if (!p1) { sel1.focus(); return; }
     const players = p2 ? [p1, p2] : [p1];
+
+    // Check for duplicate players across teams
+    const existingPlayers = new Map();
+    for (const team of t.teams) {
+      for (const pl of team.players) {
+        existingPlayers.set(pl, team.name);
+      }
+    }
+    for (const pl of players) {
+      if (existingPlayers.has(pl)) {
+        showToast(`${pl} is already on team "${existingPlayers.get(pl)}"`, 'error');
+        return;
+      }
+    }
+
     try {
       await addTeam(t.id, players);
     } catch (err) {
-      alert('Error: ' + err.message);
+      showToast('Error: ' + err.message, 'error');
     }
   });
 
-  // Remove team
+  // Remove team (with confirmation)
   container.querySelectorAll('.team-remove').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const teamId = btn.dataset.teamId;
+      const team = t.teams.find(tm => tm.id === teamId);
+      const teamLabel = team ? team.name : teamId;
+      const confirmed = await showConfirm(`Remove team "${teamLabel}"?`, { type: 'warning', confirmLabel: 'Remove' });
+      if (!confirmed) return;
       try {
         await removeTeam(t.id, teamId);
       } catch (err) {
-        alert('Error: ' + err.message);
+        showToast('Error: ' + err.message, 'error');
       }
     });
   });
@@ -357,7 +380,7 @@ function bindSetupEvents(t) {
     try {
       await updateTournamentConfig(t.id, { format: e.target.value || null });
     } catch (err) {
-      alert('Error: ' + err.message);
+      showToast('Error: ' + err.message, 'error');
     }
   });
 
@@ -366,13 +389,26 @@ function bindSetupEvents(t) {
     try {
       await updateTournamentConfig(t.id, { config: { ...t.config, seedingMode: e.target.value } });
     } catch (err) {
-      alert('Error: ' + err.message);
+      showToast('Error: ' + err.message, 'error');
     }
   });
 
-  // Lock
+  // Lock (with uniform team size check and game count preview)
   container.querySelector('#tournamentLockBtn')?.addEventListener('click', async () => {
-    if (!confirm(`Lock tournament "${t.name}" with ${t.teams.length} teams in ${FORMAT_LABELS[t.format]}? This cannot be undone.`)) return;
+    // Validate uniform team sizes
+    const sizes = new Set(t.teams.map(tm => tm.players.length));
+    if (sizes.size > 1) {
+      showToast('All teams must have the same number of players (all singles or all doubles).', 'error');
+      return;
+    }
+
+    const gameCount = estimateGameCount(t.teams.length, t.format, t.config);
+    const confirmed = await showConfirm(
+      `Lock tournament "${t.name}" with ${t.teams.length} teams in ${FORMAT_LABELS[t.format]}?\n\nThis will create ~${gameCount} games. This cannot be undone.`,
+      { type: 'warning', confirmLabel: '🔒 Lock In' }
+    );
+    if (!confirmed) return;
+
     const btn = container.querySelector('#tournamentLockBtn');
     btn.disabled = true;
     btn.textContent = 'Locking...';
@@ -380,7 +416,7 @@ function bindSetupEvents(t) {
       const playerElos = getPlayerElos();
       await lockTournament(t.id, playerElos);
     } catch (err) {
-      alert('Error: ' + err.message);
+      showToast('Error: ' + err.message, 'error');
       btn.disabled = false;
       btn.textContent = '🔒 Lock In & Start';
     }
@@ -445,7 +481,7 @@ function bindInProgressEvents(t) {
     try {
       await generateNextSwissRound(t.id);
     } catch (err) {
-      alert('Error: ' + err.message);
+      showToast('Error: ' + err.message, 'error');
     }
     btn.disabled = false;
   });
@@ -490,7 +526,48 @@ function renderCompletedView(t) {
   // All games
   html += renderGameList(t);
 
+  // Re-do button
+  html += `<div style="margin-top: 16px; text-align: center;">
+    <button id="tournamentRedoBtn" class="tournament-btn" style="font-size: 0.95em;">🔄 Re-do Tournament</button>
+  </div>`;
+
   return html;
+}
+
+function bindCompletedEvents(t) {
+  const container = document.getElementById('tournamentDetail');
+  if (!container) return;
+
+  container.querySelector('#tournamentRedoBtn')?.addEventListener('click', async () => {
+    const defaultName = t.name + ' (rematch)';
+    const confirmed = await showConfirm(
+      `Create a new tournament with the same teams and format?`,
+      {
+        confirmLabel: '🔄 Re-do',
+        type: 'info',
+        contentElement: (() => {
+          const el = document.createElement('div');
+          el.innerHTML = `<input type="text" id="redoTournamentName" value="${escapeHtml(defaultName)}" 
+            style="width:100%;padding:8px;margin-top:8px;border-radius:4px;border:1px solid #555;background:#333;color:#eee;font-size:0.95em;"
+            placeholder="New tournament name">`;
+          return el;
+        })()
+      }
+    );
+    if (!confirmed) return;
+
+    const nameInput = document.getElementById('redoTournamentName');
+    const newName = nameInput?.value?.trim() || defaultName;
+
+    try {
+      const newId = await cloneTournament(t.id, newName);
+      selectedTournamentId = newId;
+      currentView = 'detail';
+      showToast(`Tournament "${newName}" created!`, 'success');
+    } catch (err) {
+      showToast('Error: ' + err.message, 'error');
+    }
+  });
 }
 
 // =========================================================================
@@ -554,8 +631,8 @@ function renderGameList(t) {
 
 function startTournamentGame(tournament, gameId) {
   const game = getGameById(tournament, gameId);
-  if (!game) { alert('Game not found'); return; }
-  if (game.status !== 'ready') { alert('This game is not ready to play yet.'); return; }
+  if (!game) { showToast('Game not found', 'error'); return; }
+  if (game.status !== 'ready') { showToast('This game is not ready to play yet.', 'warning'); return; }
 
   activeTournamentGame = {
     tournamentId: tournament.id,
@@ -587,22 +664,22 @@ function startTournamentGame(tournament, gameId) {
 /**
  * Called after a match is submitted for a tournament game.
  * Cascades the result in the tournament.
+ * @param {string} matchId - Firestore match document ID
+ * @param {number} goalsA - Goals scored by team in red side
+ * @param {number} goalsB - Goals scored by team in blue side
+ * @param {number} winnerIndex - 0 or 1, index in tournament game slots
  */
-export async function completeTournamentMatch(matchId, goalsA, goalsB, winner) {
+export async function completeTournamentMatch(matchId, goalsA, goalsB, winnerIndex) {
   if (!activeTournamentGame) return;
 
-  const { tournamentId, gameId, team0, team1 } = activeTournamentGame;
-
-  // Determine winner index (0 or 1) based on which team is in slot 0/1
-  // team0 = slot 0 (teamA in match), team1 = slot 1 (teamB in match)
-  const winnerIndex = winner === 'A' ? 0 : 1;
+  const { tournamentId, gameId } = activeTournamentGame;
   const score = [goalsA, goalsB];
 
   try {
     await submitTournamentGameResult(tournamentId, gameId, winnerIndex, matchId, score);
   } catch (err) {
     console.error('Failed to submit tournament game result:', err);
-    alert('Tournament result error: ' + err.message);
+    showToast('Tournament result error: ' + err.message, 'error');
   }
 
   activeTournamentGame = null;
@@ -754,6 +831,26 @@ function bindBracketTabs(t) {
 // =========================================================================
 // Helpers
 // =========================================================================
+
+function estimateGameCount(numTeams, format, config = {}) {
+  switch (format) {
+    case 'single_elim':
+      return numTeams - 1;
+    case 'double_elim': {
+      // WB + LB + GF (+ optional reset)
+      const total = 2 * numTeams - 2 + 1;
+      return config.grandFinalReset ? total + 1 : total;
+    }
+    case 'swiss': {
+      const rounds = config.swissRounds || Math.ceil(Math.log2(numTeams));
+      return Math.floor(numTeams / 2) * rounds;
+    }
+    case 'round_robin':
+      return numTeams * (numTeams - 1) / 2;
+    default:
+      return '?';
+  }
+}
 
 function getAvailablePlayers() {
   // Collect unique player names from recent matches

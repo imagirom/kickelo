@@ -389,6 +389,51 @@ export async function restoreTournament(tournamentId) {
 }
 
 // =========================================================================
+// Clone (Re-do)
+// =========================================================================
+
+/**
+ * Clone a tournament: creates a new tournament in setup state
+ * with the same teams, format, and config. Ready to be locked again.
+ * @param {string} tournamentId - ID of the tournament to clone
+ * @param {string} newName - Name for the new tournament
+ * @returns {Promise<string>} ID of the new tournament
+ */
+export async function cloneTournament(tournamentId, newName) {
+  const t = await fetchTournament(tournamentId);
+  if (!t) throw new Error('Tournament not found');
+  if (!newName || !newName.trim()) throw new Error('New tournament name is required');
+
+  // Clone teams (reset seeds to insertion order, clear avgElo)
+  const clonedTeams = t.teams.map((team, i) => ({
+    id: 't' + (i + 1),
+    name: team.name,
+    players: [...team.players],
+    seed: i + 1,
+    avgElo: null,
+  }));
+
+  const data = {
+    name: newName.trim(),
+    format: t.format,
+    state: 'setup',
+    createdAt: serverTimestamp(),
+    lockedAt: null,
+    completedAt: null,
+    deletedAt: null,
+    adminPassword: t.adminPassword || null,
+    teams: clonedTeams,
+    config: { ...t.config },
+    games: [],
+    defaultGameOrder: [],
+    finalRankings: null,
+  };
+
+  const docRef = await addDoc(collection(db, TOURNAMENTS_COLLECTION), data);
+  return docRef.id;
+}
+
+// =========================================================================
 // Exports
 // =========================================================================
 

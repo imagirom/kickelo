@@ -1263,7 +1263,10 @@ class PlayerStatsComponent extends HTMLElement {
             infoRow.style.display = 'flex';
             infoRow.style.alignItems = 'center';
             infoRow.style.justifyContent = 'space-between';
-            infoRow.innerHTML = ` <div class="match-info"> <span class="team-display">${playerTeamHtml}</span> <strong class="match-score">${playerGoals}:${opponentGoals}</strong> <span class="team-display">${opponentTeamHtml}</span> </div> <div class="elo-change"> ${changeSpanText} </div> `;
+            const tournamentTag = match.tournamentGameName
+                ? `<span style="font-size: 0.7em; color: #d4a843; margin-left: 6px; white-space: nowrap;">🏆 ${match.tournamentGameName}</span>`
+                : '';
+            infoRow.innerHTML = ` <div class="match-info"> <span class="team-display">${playerTeamHtml}</span> <strong class="match-score">${playerGoals}:${opponentGoals}</strong> <span class="team-display">${opponentTeamHtml}</span>${tournamentTag} </div> <div class="elo-change"> ${changeSpanText} </div> `;
             li.appendChild(infoRow);
             // Add timeline for live matches below the info row
             if (Array.isArray(match.goalLog) && match.goalLog.length > 0) {

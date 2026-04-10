@@ -402,7 +402,14 @@ export function setupMatchForm() {
 
             // Complete tournament game if in tournament mode
             if (tournamentGame) {
-                await completeTournamentMatch(matchDocRef.id, parsedGoalsA, parsedGoalsB, winner);
+                if (!validateTournamentTeams(tournamentGame)) {
+                    showToast('Match submitted but tournament result could not be recorded.', 'warning');
+                } else {
+                    const winnerIndex = getTournamentWinnerIndex(winner);
+                    await completeTournamentMatch(matchDocRef.id, parsedGoalsA, parsedGoalsB, winnerIndex);
+                }
+                setPlayerSelectsLocked(false);
+                tournamentTeamMapping = null;
                 window.dispatchEvent(new Event('tournament-game-submitted'));
             }
 
@@ -459,6 +466,10 @@ if (swapBlueTeamHitbox) {
 
 // Swap teams button
 document.getElementById('swapTeams').addEventListener('click', () => {
+    // Temporarily unlock if in tournament mode
+    const wasLocked = teamA1Select.disabled;
+    if (wasLocked) setPlayerSelectsLocked(false);
+
     const tempA1 = teamA1Select.value;
     const tempA2 = teamA2Select.value;
     const tempB1 = teamB1Select.value;
@@ -468,6 +479,14 @@ document.getElementById('swapTeams').addEventListener('click', () => {
     teamA2Select.value = tempB2;
     teamB1Select.value = tempA1;
     teamB2Select.value = tempA2;
+
+    // Update tournament team mapping if active
+    if (tournamentTeamMapping) {
+        const { team0Color, team1Color } = tournamentTeamMapping;
+        tournamentTeamMapping = { team0Color: team1Color, team1Color: team0Color };
+    }
+
+    if (wasLocked) setPlayerSelectsLocked(true);
     flashSelectGroup([teamA1Select, teamA2Select, teamB1Select, teamB2Select]);
     notifyRolesChanged();
 });
@@ -968,19 +987,27 @@ export function notifyRolesChanged(team = null) {
 // =========================================================================
 
 let tournamentBannerEl = null;
+let tournamentTeamMapping = null; // tracks which tournament team is in which color
 
 window.addEventListener('tournament-game-selected', (e) => {
     const { tournamentName, gameName, team0, team1 } = e.detail;
 
     // Pre-fill players: team0 → teamA (red), team1 → teamB (blue)
+    // For single-player teams, fill both offense and defense
     if (team0?.players) {
         teamA1Select.value = team0.players[0] || '';
-        teamA2Select.value = team0.players.length > 1 ? team0.players[1] : '';
+        teamA2Select.value = team0.players.length > 1 ? team0.players[1] : (team0.players[0] || '');
     }
     if (team1?.players) {
         teamB1Select.value = team1.players[0] || '';
-        teamB2Select.value = team1.players.length > 1 ? team1.players[1] : '';
+        teamB2Select.value = team1.players.length > 1 ? team1.players[1] : (team1.players[0] || '');
     }
+
+    // Track original mapping: team0 starts as teamA (red)
+    tournamentTeamMapping = { team0Color: 'A', team1Color: 'B' };
+
+    // Lock player selects (disable them)
+    setPlayerSelectsLocked(true);
 
     // Reset scores
     teamAgoalsInput.value = '0';
@@ -992,6 +1019,63 @@ window.addEventListener('tournament-game-selected', (e) => {
     // Notify roles changed
     notifyRolesChanged();
 });
+
+function setPlayerSelectsLocked(locked) {
+    [teamA1Select, teamA2Select, teamB1Select, teamB2Select].forEach(sel => {
+        sel.disabled = locked;
+        sel.style.opacity = locked ? '0.7' : '';
+    });
+}
+
+/**
+ * Get the correct winner index (0 or 1 in tournament game slots)
+ * accounting for potential team swaps via the swap-teams button.
+ */
+function getTournamentWinnerIndex(matchWinner) {
+    if (!tournamentTeamMapping) return matchWinner === 'A' ? 0 : 1;
+    // team0Color tells us which match side team0 is on
+    if (tournamentTeamMapping.team0Color === 'A') {
+        return matchWinner === 'A' ? 0 : 1;
+    } else {
+        return matchWinner === 'A' ? 1 : 0;
+    }
+}
+
+/**
+ * Validate that current form players match the expected tournament teams.
+ * Returns true if valid, false otherwise (shows a toast).
+ */
+function validateTournamentTeams(tournamentGame) {
+    if (!tournamentGame) return true;
+    const { team0, team1 } = tournamentGame;
+
+    const formTeamA = [teamA1Select.value, teamA2Select.value].filter(Boolean).sort();
+    const formTeamB = [teamB1Select.value, teamB2Select.value].filter(Boolean).sort();
+
+    const t0Players = (team0?.players || []).slice().sort();
+    const t1Players = (team1?.players || []).slice().sort();
+    // For single-player teams, the same player appears in both selects
+    const t0Unique = [...new Set(t0Players)].sort();
+    const t1Unique = [...new Set(t1Players)].sort();
+    const formAUnique = [...new Set(formTeamA)].sort();
+    const formBUnique = [...new Set(formTeamB)].sort();
+
+    const arrEq = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+
+    // Normal order: team0=A, team1=B
+    if (arrEq(formAUnique, t0Unique) && arrEq(formBUnique, t1Unique)) {
+        tournamentTeamMapping = { team0Color: 'A', team1Color: 'B' };
+        return true;
+    }
+    // Swapped order: team0=B, team1=A
+    if (arrEq(formAUnique, t1Unique) && arrEq(formBUnique, t0Unique)) {
+        tournamentTeamMapping = { team0Color: 'B', team1Color: 'A' };
+        return true;
+    }
+
+    showToast('Teams do not match the tournament game. Please cancel and re-select the game.', 'error', 5000);
+    return false;
+}
 
 function showTournamentBanner(tournamentName, gameName) {
     removeTournamentBanner();
@@ -1010,6 +1094,8 @@ function showTournamentBanner(tournamentName, gameName) {
     tournamentBannerEl.querySelector('#tournamentCancelBtn')?.addEventListener('click', () => {
         clearActiveTournamentGame();
         removeTournamentBanner();
+        setPlayerSelectsLocked(false);
+        tournamentTeamMapping = null;
         resetMatchForm();
     });
 }

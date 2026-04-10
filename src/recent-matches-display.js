@@ -31,19 +31,22 @@ function createMatchListItem(match) {
             ? '(unranked)'
             : `(Elo Δ: ${deltaDisplay})`;
 
-    // Edited / deleted indicators
+    // Edited / deleted / tournament indicators
     const deletedTag = match.deleted
         ? '<span class="match-deleted-tag">(deleted)</span>'
         : '';
     const editedTag = !match.deleted && Array.isArray(match.editHistory) && match.editHistory.length > 0
         ? '<span class="match-edited-tag">(edited)</span>'
         : '';
+    const tournamentTag = match.tournamentGameName
+        ? `<span class="match-tournament-tag">🏆 ${match.tournamentGameName}</span>`
+        : '';
 
     // Top row: result text + edit button
     const topRow = document.createElement('div');
     topRow.style.display = 'flex';
     topRow.style.alignItems = 'center';
-    topRow.innerHTML = `<span class="match-result-text" style="flex: 1;">${winner} ${winnerGoals}:${loserGoals} ${loser} <span style="font-size: 0.9em; color: gray;">${deltaLabel}</span>${deletedTag}${editedTag}</span>`;
+    topRow.innerHTML = `<span class="match-result-text" style="flex: 1;">${winner} ${winnerGoals}:${loserGoals} ${loser} <span style="font-size: 0.9em; color: gray;">${deltaLabel}</span>${deletedTag}${editedTag}${tournamentTag}</span>`;
     if (match.deleted) {
         li.classList.add('match-deleted');
     }
