@@ -1263,8 +1263,13 @@ class PlayerStatsComponent extends HTMLElement {
             infoRow.style.display = 'flex';
             infoRow.style.alignItems = 'center';
             infoRow.style.justifyContent = 'space-between';
-            const tournamentTag = match.tournamentGameName
-                ? `<span style="font-size: 0.7em; color: #d4a843; margin-left: 6px; white-space: nowrap;">🏆 ${match.tournamentGameName}</span>`
+            const tournamentLabel = match.tournamentGameName
+                ? (match.tournamentName
+                    ? `${match.tournamentName} — ${match.tournamentGameName}`
+                    : match.tournamentGameName)
+                : '';
+            const tournamentTag = tournamentLabel
+                ? `<span style="font-size: 0.7em; color: #d4a843; margin-left: 6px; white-space: nowrap;">🏆 ${tournamentLabel}</span>`
                 : '';
             infoRow.innerHTML = ` <div class="match-info"> <span class="team-display">${playerTeamHtml}</span> <strong class="match-score">${playerGoals}:${opponentGoals}</strong> <span class="team-display">${opponentTeamHtml}</span>${tournamentTag} </div> <div class="elo-change"> ${changeSpanText} </div> `;
             li.appendChild(infoRow);

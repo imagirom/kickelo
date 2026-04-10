@@ -38,8 +38,13 @@ function createMatchListItem(match) {
     const editedTag = !match.deleted && Array.isArray(match.editHistory) && match.editHistory.length > 0
         ? '<span class="match-edited-tag">(edited)</span>'
         : '';
-    const tournamentTag = match.tournamentGameName
-        ? `<span class="match-tournament-tag">🏆 ${match.tournamentGameName}</span>`
+    const tournamentLabel = match.tournamentGameName
+        ? (match.tournamentName
+            ? `${match.tournamentName} — ${match.tournamentGameName}`
+            : match.tournamentGameName)
+        : '';
+    const tournamentTag = tournamentLabel
+        ? `<span class="match-tournament-tag">🏆 ${tournamentLabel}</span>`
         : '';
 
     // Top row: result text + edit button

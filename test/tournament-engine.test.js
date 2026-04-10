@@ -14,6 +14,9 @@ import {
   isSwissRoundComplete,
   getCurrentSwissRound,
   computeFinalRankings,
+  getDownstreamGames,
+  hasCompletedDownstream,
+  uncompleteGame,
 } from '../src/tournament/tournament-engine.js';
 
 import {
@@ -731,6 +734,105 @@ console.log('\n=== Double Elimination — GF Reset ===');
   assert(gfReset != null, 'GF reset game exists');
   assertEq(gfReset.roundName, 'Grand Final Reset', 'correct name');
   assert(games.length === 7, '4-team DE with reset → 7 games');
+}
+
+// ===========================================================================
+// uncompleteGame & downstream helpers
+// ===========================================================================
+
+console.log(`\n=== uncompleteGame — 4-team Single Elim ===`);
+{
+  const teams = makeTeams(4);
+  const { games, defaultGameOrder } = generateSingleElimBracket(teams, {});
+  const t = makeTournament(teams, 'single_elim', games, defaultGameOrder);
+  initializeBracket(t);
+
+  // Play first semifinal: t1 beats t4
+  const sf1 = getGameById(t, 'r1-g1');
+  assert(sf1.status === 'ready', 'SF1 is ready');
+  completeGame(t, 'r1-g1', 0, 'match-1', [6, 3]);
+
+  // Check downstream of r1-g1 is the final
+  const downstream = getDownstreamGames(t, 'r1-g1');
+  assert(downstream.length === 1, 'SF1 has 1 downstream game');
+  assertEq(downstream[0].game.id, 'f', 'downstream game is the final');
+
+  // No completed downstream yet
+  assertEq(hasCompletedDownstream(t, 'r1-g1'), false, 'no completed downstream after SF1');
+
+  // Uncomplete should work
+  uncompleteGame(t, 'r1-g1');
+  assertEq(sf1.status, 'ready', 'SF1 back to ready after uncomplete');
+  assertEq(sf1.result, null, 'SF1 result cleared');
+
+  // Final should have lost team0 assignment
+  const final_ = getGameById(t, 'f');
+  assertEq(final_.teams[0].teamId, null, 'final team0 cleared after uncomplete');
+  assertEq(final_.status, 'waiting', 'final back to waiting');
+
+  // Re-complete with different winner: t4 beats t1
+  completeGame(t, 'r1-g1', 1, 'match-1b', [3, 6]);
+  assertEq(final_.teams[0].teamId, 't4', 'final team0 is now t4 (new winner)');
+}
+
+console.log(`\n=== uncompleteGame — blocks when downstream completed ===`);
+{
+  const teams = makeTeams(4);
+  const { games, defaultGameOrder } = generateSingleElimBracket(teams, {});
+  const t = makeTournament(teams, 'single_elim', games, defaultGameOrder);
+  initializeBracket(t);
+
+  // Play both semis and the final
+  completeGame(t, 'r1-g1', 0, 'm1', [6, 3]);
+  completeGame(t, 'r1-g2', 0, 'm2', [6, 2]);
+  completeGame(t, 'f', 0, 'm3', [6, 4]);
+
+  // Now SF1 has completed downstream (the final)
+  assertEq(hasCompletedDownstream(t, 'r1-g1'), true, 'SF1 has completed downstream');
+
+  // Uncomplete should throw
+  assertThrows(() => uncompleteGame(t, 'r1-g1'), 'cannot uncomplete SF1 with completed final');
+
+  // But uncompleting the final itself should work
+  uncompleteGame(t, 'f');
+  assertEq(getGameById(t, 'f').status, 'ready', 'final back to ready');
+  assertEq(t.state, 'in_progress', 'tournament back to in_progress');
+}
+
+console.log(`\n=== uncompleteGame — double elim cascade ===`);
+{
+  const teams = makeTeams(4);
+  const { games, defaultGameOrder } = generateDoubleElimBracket(teams, {});
+  const t = makeTournament(teams, 'double_elim', games, defaultGameOrder);
+  initializeBracket(t);
+
+  // Play WB SF1
+  completeGame(t, 'wb-r1-g1', 0, 'de-m1', [6, 2]);
+
+  // The loser should have propagated to LB
+  const lbGames = t.games.filter(g => g.bracket === 'losers');
+  const lbWithTeam = lbGames.find(g => g.teams.some(team => team.teamId === 't4'));
+  assert(lbWithTeam != null, 'loser t4 cascaded to losers bracket');
+
+  // Uncomplete WB SF1
+  uncompleteGame(t, 'wb-r1-g1');
+  const wbSf1 = getGameById(t, 'wb-r1-g1');
+  assertEq(wbSf1.status, 'ready', 'WB SF1 back to ready');
+
+  // LB game should have lost the team assignment
+  const lbAfter = t.games.filter(g => g.bracket === 'losers' && g.teams.some(team => team.teamId === 't4'));
+  assertEq(lbAfter.length, 0, 'loser t4 cleared from losers bracket');
+}
+
+console.log(`\n=== getDownstreamGames — no downstream for final ===`);
+{
+  const teams = makeTeams(4);
+  const { games, defaultGameOrder } = generateSingleElimBracket(teams, {});
+  const t = makeTournament(teams, 'single_elim', games, defaultGameOrder);
+  initializeBracket(t);
+
+  const downstream = getDownstreamGames(t, 'f');
+  assertEq(downstream.length, 0, 'final has no downstream');
 }
 
 // ===========================================================================

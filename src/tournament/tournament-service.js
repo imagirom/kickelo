@@ -8,7 +8,8 @@ import { serverTimestamp } from 'firebase/firestore';
 import {
   initializeBracket, completeGame, isTournamentComplete,
   computeFinalRankings, validateTournamentSetup, generateTeamName,
-  isSwissRoundComplete, getCurrentSwissRound
+  isSwissRoundComplete, getCurrentSwissRound,
+  uncompleteGame, hasCompletedDownstream, getGameById,
 } from './tournament-engine.js';
 import {
   generateSingleElimBracket, generateDoubleElimBracket,
@@ -350,6 +351,71 @@ export async function generateNextSwissRound(tournamentId) {
   });
 
   return { newGames, newGameOrder };
+}
+
+// =========================================================================
+// Tournament Match Editing
+// =========================================================================
+
+/**
+ * Check if a tournament game result can be edited.
+ * Returns { editable: boolean, reason?: string }.
+ */
+export async function canEditTournamentGame(tournamentId, gameId) {
+  const t = await fetchTournament(tournamentId);
+  if (!t) return { editable: false, reason: 'Tournament not found' };
+
+  const game = getGameById(t, gameId);
+  if (!game) return { editable: false, reason: 'Game not found in tournament' };
+  if (game.status !== 'completed') return { editable: false, reason: 'Game is not completed' };
+  if (game.isBye) return { editable: false, reason: 'Cannot edit bye games' };
+
+  if (hasCompletedDownstream(t, gameId)) {
+    return { editable: false, reason: 'Subsequent tournament games have already been played' };
+  }
+
+  return { editable: true };
+}
+
+/**
+ * Update a tournament game result after a match edit.
+ * Uncompletes the game, then re-completes with the new result.
+ * Only allowed if no downstream games have been completed.
+ *
+ * @param {string} tournamentId
+ * @param {string} gameId
+ * @param {number} newWinnerIndex - 0 or 1
+ * @param {string} matchId - Match document ID
+ * @param {number[]} newScore - [team0Goals, team1Goals]
+ */
+export async function updateTournamentGameResult(tournamentId, gameId, newWinnerIndex, matchId, newScore) {
+  const t = await fetchTournament(tournamentId);
+  if (!t) throw new Error('Tournament not found');
+
+  // Uncomplete (validates no completed downstream internally)
+  uncompleteGame(t, gameId);
+
+  // Re-complete with new result
+  completeGame(t, gameId, newWinnerIndex, matchId, newScore);
+
+  // Check if tournament is now complete again
+  const updates = { games: t.games };
+  if (isTournamentComplete(t)) {
+    t.finalRankings = computeFinalRankings(t);
+    t.state = 'completed';
+    t.completedAt = Date.now();
+    updates.finalRankings = t.finalRankings;
+    updates.state = 'completed';
+    updates.completedAt = t.completedAt;
+  } else if (t.state === 'completed') {
+    // Was completed but now isn't (shouldn't happen normally)
+    updates.state = 'in_progress';
+    updates.completedAt = null;
+    updates.finalRankings = null;
+  }
+
+  await updateDoc(doc(db, TOURNAMENTS_COLLECTION, tournamentId), updates);
+  return t;
 }
 
 // =========================================================================

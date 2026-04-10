@@ -4,7 +4,8 @@
 import { allPlayers } from './player-data-service.js';
 import { canEditMatch, saveMatchEdit, softDeleteMatch } from './match-edit-service.js';
 import { MAX_GOALS } from './constants.js';
-import { showConfirm } from './toast.js';
+import { showConfirm, showToast } from './toast.js';
+import { canEditTournamentGame, updateTournamentGameResult, getTournamentById } from './tournament/tournament-service.js';
 
 let currentModal = null;
 
@@ -12,6 +13,64 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+/**
+ * Determine the tournament winner index (0 or 1) from the edited match data.
+ * Maps the match's teamA/teamB to tournament game's team slots.
+ */
+async function determineTournamentWinnerIndex(tournamentId, gameId, edited, matchWinner) {
+    const tournament = getTournamentById(tournamentId);
+    if (!tournament) throw new Error('Tournament not found');
+
+    const game = tournament.games.find(g => g.id === gameId);
+    if (!game) throw new Error('Tournament game not found');
+
+    // Get team players from tournament
+    const t0 = tournament.teams.find(t => t.id === game.teams[0]?.teamId);
+    const t1 = tournament.teams.find(t => t.id === game.teams[1]?.teamId);
+
+    const t0Players = t0 ? [...new Set(t0.players)].sort() : [];
+    const t1Players = t1 ? [...new Set(t1.players)].sort() : [];
+
+    const editedTeamA = [...new Set(edited.teamA)].sort();
+
+    const arrEq = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+
+    // Determine: is match teamA = tournament team0 or team1?
+    if (arrEq(editedTeamA, t0Players)) {
+        // teamA = team0: winner 'A' means winnerIndex 0
+        return matchWinner === 'A' ? 0 : 1;
+    } else if (arrEq(editedTeamA, t1Players)) {
+        // teamA = team1: winner 'A' means winnerIndex 1
+        return matchWinner === 'A' ? 1 : 0;
+    }
+
+    // Fallback: assume original mapping
+    return matchWinner === 'A' ? 0 : 1;
+}
+
+/**
+ * Determine the tournament score in team0/team1 order from the edited match data.
+ */
+function determineTournamentScore(tournamentId, gameId, edited) {
+    const tournament = getTournamentById(tournamentId);
+    if (!tournament) return [edited.goalsA, edited.goalsB];
+
+    const game = tournament.games.find(g => g.id === gameId);
+    if (!game) return [edited.goalsA, edited.goalsB];
+
+    const t0 = tournament.teams.find(t => t.id === game.teams[0]?.teamId);
+    const t0Players = t0 ? [...new Set(t0.players)].sort() : [];
+    const editedTeamA = [...new Set(edited.teamA)].sort();
+    const arrEq = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+
+    // If match teamA = tournament team0, score is [goalsA, goalsB]
+    // If match teamA = tournament team1, score is [goalsB, goalsA]
+    if (arrEq(editedTeamA, t0Players)) {
+        return [edited.goalsA, edited.goalsB];
+    }
+    return [edited.goalsB, edited.goalsA];
 }
 
 /**
@@ -116,7 +175,7 @@ function buildChangeSummary(original, getEdited) {
  * Open the edit modal for a given match.
  * @param {object} match - The match object from allMatches.
  */
-export function openEditModal(match) {
+export async function openEditModal(match) {
     if (currentModal) {
         closeEditModal();
     }
@@ -124,6 +183,15 @@ export function openEditModal(match) {
     const editCheck = canEditMatch(match);
     if (!editCheck.editable) {
         return;
+    }
+
+    // Check tournament editability if this is a tournament match
+    if (match.tournamentId && match.tournamentGameId) {
+        const tournamentCheck = await canEditTournamentGame(match.tournamentId, match.tournamentGameId);
+        if (!tournamentCheck.editable) {
+            showToast(tournamentCheck.reason, 'warning', 4000);
+            return;
+        }
     }
 
     const is2v2 = match.teamA.length === 2;
@@ -393,6 +461,16 @@ export function openEditModal(match) {
         } else if (goalLogAction === 'swap') {
             warnings.push('The goal log teams will be swapped to match the new score.');
         }
+        // Tournament-specific warning
+        if (match.tournamentId && match.tournamentGameId) {
+            const oldWinnerSide = match.goalsA > match.goalsB ? 'A' : 'B';
+            const newWinnerSide = edited.goalsA > edited.goalsB ? 'A' : 'B';
+            if (oldWinnerSide !== newWinnerSide) {
+                warnings.push('⚠️ This changes the winner — the tournament bracket will be updated accordingly.');
+            } else if (scoreChanged) {
+                warnings.push('The tournament game score will be updated.');
+            }
+        }
 
         if (warnings.length > 0) {
             const proceed = await showConfirm(
@@ -407,6 +485,43 @@ export function openEditModal(match) {
 
         const success = await saveMatchEdit(match, edited, goalLogAction);
         if (success) {
+            // If this is a tournament match and the winner changed, cascade the update
+            if (match.tournamentId && match.tournamentGameId) {
+                const oldWinner = match.goalsA > match.goalsB ? 'A' : 'B';
+                const newWinner = edited.goalsA > edited.goalsB ? 'A' : 'B';
+                const oldScore = [match.goalsA, match.goalsB];
+                const newScore = [edited.goalsA, edited.goalsB];
+                const winnerChanged = oldWinner !== newWinner;
+                const scoreChanged2 = oldScore[0] !== newScore[0] || oldScore[1] !== newScore[1];
+
+                if (winnerChanged || scoreChanged2) {
+                    try {
+                        // Determine winnerIndex in tournament terms
+                        // The match stores teams in form order, tournament stores in slot order
+                        // We need to figure out which tournament team won
+                        // team0 players = match's original teamA? Not necessarily if swapped during play
+                        // Safest: look at edited teamA/teamB and match to tournament teams
+                        const tournamentWinnerIndex = await determineTournamentWinnerIndex(
+                            match.tournamentId, match.tournamentGameId, edited, newWinner
+                        );
+                        // Score in tournament order (team0 goals, team1 goals)
+                        const tournamentScore = determineTournamentScore(
+                            match.tournamentId, match.tournamentGameId, edited
+                        );
+                        await updateTournamentGameResult(
+                            match.tournamentId,
+                            match.tournamentGameId,
+                            tournamentWinnerIndex,
+                            match.id,
+                            tournamentScore
+                        );
+                        showToast('Tournament bracket updated', 'success');
+                    } catch (err) {
+                        console.error('Failed to update tournament:', err);
+                        showToast('Match saved but tournament update failed: ' + err.message, 'warning', 5000);
+                    }
+                }
+            }
             closeEditModal();
         } else {
             btnSave.disabled = false;

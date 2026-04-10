@@ -368,6 +368,7 @@ export function setupMatchForm() {
                 matchData.tournamentId = tournamentGame.tournamentId;
                 matchData.tournamentGameId = tournamentGame.gameId;
                 matchData.tournamentGameName = tournamentGame.gameName;
+                matchData.tournamentName = tournamentGame.tournamentName;
             }
 
             // 2. Add match to Firestore first
@@ -406,7 +407,11 @@ export function setupMatchForm() {
                     showToast('Match submitted but tournament result could not be recorded.', 'warning');
                 } else {
                     const winnerIndex = getTournamentWinnerIndex(winner);
-                    await completeTournamentMatch(matchDocRef.id, parsedGoalsA, parsedGoalsB, winnerIndex);
+                    // When teams are swapped, score must also be swapped to match tournament team order
+                    const teamsSwapped = tournamentTeamMapping && tournamentTeamMapping.team0Color === 'B';
+                    const tScore0 = teamsSwapped ? parsedGoalsB : parsedGoalsA;
+                    const tScore1 = teamsSwapped ? parsedGoalsA : parsedGoalsB;
+                    await completeTournamentMatch(matchDocRef.id, tScore0, tScore1, winnerIndex);
                 }
                 setPlayerSelectsLocked(false);
                 tournamentTeamMapping = null;
@@ -1023,7 +1028,15 @@ window.addEventListener('tournament-game-selected', (e) => {
 function setPlayerSelectsLocked(locked) {
     [teamA1Select, teamA2Select, teamB1Select, teamB2Select].forEach(sel => {
         sel.disabled = locked;
-        sel.style.opacity = locked ? '0.7' : '';
+        if (locked) {
+            // Make background fully opaque to signal locked state
+            const isBlue = sel.classList.contains('blue_select');
+            sel.style.backgroundColor = isBlue ? 'rgb(49, 76, 86)' : 'rgb(106, 37, 45)';
+            sel.style.opacity = '';
+        } else {
+            sel.style.backgroundColor = '';
+            sel.style.opacity = '';
+        }
     });
 }
 

@@ -382,6 +382,97 @@ function assignRanks(sorted, isTied) {
   return result;
 }
 
+// --- Downstream dependency helpers ---
+
+/**
+ * Get all games that directly source their teams from a given game.
+ * Returns array of { game, slotIdx, sourceOutcome } objects.
+ */
+export function getDownstreamGames(tournament, gameId) {
+  const result = [];
+  for (const game of tournament.games) {
+    for (let slotIdx = 0; slotIdx < 2; slotIdx++) {
+      const slot = game.slots[slotIdx];
+      if (slot.sourceGameId === gameId) {
+        result.push({ game, slotIdx, sourceOutcome: slot.sourceOutcome });
+      }
+    }
+  }
+  return result;
+}
+
+/**
+ * Check if any downstream game (recursively) from this game is completed.
+ * Used to determine if a game result can still be edited.
+ */
+export function hasCompletedDownstream(tournament, gameId) {
+  const visited = new Set();
+  const queue = [gameId];
+
+  while (queue.length > 0) {
+    const currentId = queue.shift();
+    if (visited.has(currentId)) continue;
+    visited.add(currentId);
+
+    const downstream = getDownstreamGames(tournament, currentId);
+    for (const { game } of downstream) {
+      if (game.status === 'completed' && !game.isBye) return true;
+      // Also check further downstream even if this game isn't completed yet
+      queue.push(game.id);
+    }
+  }
+  return false;
+}
+
+/**
+ * Uncomplete a game: revert its result and clear cascaded team assignments
+ * in all downstream games. Downstream 'ready' games become 'waiting' again.
+ * Only works on completed, non-bye games with no completed downstream non-bye games.
+ *
+ * @param {Object} tournament - Tournament object (mutated in place)
+ * @param {string} gameId - Game ID to uncomplete
+ * @throws if game not found, not completed, or has completed downstream games
+ */
+export function uncompleteGame(tournament, gameId) {
+  const game = getGameById(tournament, gameId);
+  if (!game) throw new Error(`Game "${gameId}" not found`);
+  if (game.status !== 'completed') throw new Error(`Game "${gameId}" is not completed`);
+  if (game.isBye) throw new Error(`Cannot uncomplete a bye game`);
+  if (hasCompletedDownstream(tournament, gameId)) {
+    throw new Error(`Cannot uncomplete: downstream games have already been played`);
+  }
+
+  // Clear downstream team assignments (recursive)
+  clearDownstreamTeams(tournament, gameId);
+
+  // Revert this game
+  game.status = 'ready';
+  game.result = null;
+
+  // If tournament was completed, revert to in_progress
+  if (tournament.state === 'completed') {
+    tournament.state = 'in_progress';
+    tournament.completedAt = null;
+    tournament.finalRankings = null;
+  }
+}
+
+/**
+ * Clear team assignments in all downstream games that source from the given game.
+ * Sets those games back to 'waiting' status.
+ */
+function clearDownstreamTeams(tournament, gameId) {
+  const downstream = getDownstreamGames(tournament, gameId);
+  for (const { game, slotIdx } of downstream) {
+    game.teams[slotIdx] = { teamId: null, name: null };
+    if (game.status === 'ready') {
+      game.status = 'waiting';
+    }
+    // Recursively clear further downstream
+    clearDownstreamTeams(tournament, game.id);
+  }
+}
+
 // --- Cascade helper ---
 
 /**
