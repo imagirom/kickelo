@@ -13,7 +13,8 @@ import {
 } from './tournament-engine.js';
 import {
   generateSingleElimBracket, generateDoubleElimBracket,
-  generateSwissFirstRound, generateSwissRound, generateRoundRobinSchedule
+  generateSwissFirstRound, generateSwissRound, generateRoundRobinSchedule,
+  generateDoubleRoundRobinSchedule
 } from './tournament-formats.js';
 
 const TOURNAMENTS_COLLECTION = 'tournaments';
@@ -255,6 +256,9 @@ export async function lockTournament(tournamentId, playerElos = {}) {
       break;
     case 'round_robin':
       bracket = generateRoundRobinSchedule(seededTeams, t.config);
+      break;
+    case 'double_round_robin':
+      bracket = generateDoubleRoundRobinSchedule(seededTeams, t.config);
       break;
     default:
       throw new Error('Unknown format: ' + t.format);

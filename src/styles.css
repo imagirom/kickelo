@@ -1889,9 +1889,9 @@ body.paused > *:not(#pauseOverlay) {
   flex: 1;
   min-width: 100px;
   max-width: none;
-  background: #454545;
+  background: #555;
   color: var(--text-color-primary);
-  border: 1px solid var(--border-color);
+  border: 1px solid #888;
   border-radius: 4px;
   padding: 8px;
 }
@@ -1917,9 +1917,9 @@ body.paused > *:not(#pauseOverlay) {
 .tournament-format-selector select {
   width: 100%;
   max-width: none;
-  background: #454545;
+  background: #555;
   color: var(--text-color-primary);
-  border: 1px solid var(--border-color);
+  border: 1px solid #888;
   border-radius: 4px;
   padding: 8px;
 }
@@ -1946,9 +1946,9 @@ body.paused > *:not(#pauseOverlay) {
   width: auto;
   min-width: 100px;
   max-width: none;
-  background: #454545;
+  background: #555;
   color: var(--text-color-primary);
-  border: 1px solid var(--border-color);
+  border: 1px solid #888;
   border-radius: 4px;
   padding: 8px;
 }

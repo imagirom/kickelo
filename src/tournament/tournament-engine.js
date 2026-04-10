@@ -59,7 +59,7 @@ export function validateTournamentSetup(teams, format, config) {
   if (!teams || teams.length < 2) errors.push('At least 2 teams are required');
   if (teams && teams.length > 30) errors.push('Maximum 30 teams allowed');
 
-  const validFormats = ['single_elim', 'double_elim', 'swiss', 'round_robin'];
+  const validFormats = ['single_elim', 'double_elim', 'swiss', 'round_robin', 'double_round_robin'];
   if (!validFormats.includes(format)) {
     errors.push(`Invalid format: ${format}. Must be one of: ${validFormats.join(', ')}`);
   }
@@ -215,6 +215,7 @@ export function computeFinalRankings(tournament) {
     case 'double_elim': return computeDoubleElimRankings(tournament);
     case 'swiss': return computeSwissRankings(tournament);
     case 'round_robin': return computeRoundRobinRankings(tournament);
+    case 'double_round_robin': return computeRoundRobinRankings(tournament);
     default: return [];
   }
 }

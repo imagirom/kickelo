@@ -622,3 +622,46 @@ export function generateRoundRobinSchedule(teams, config = {}) {
 
   return { games, defaultGameOrder };
 }
+
+/**
+ * Generate a Double Round Robin schedule: each pair of teams plays twice.
+ * Second half mirrors the first half with home/away swapped.
+ */
+export function generateDoubleRoundRobinSchedule(teams, config = {}) {
+  const { games: firstHalf, defaultGameOrder: firstOrder } = generateRoundRobinSchedule(teams, config);
+  const numFirstRounds = firstHalf.length > 0
+    ? Math.max(...firstHalf.map(g => g.round))
+    : 0;
+
+  const secondHalf = [];
+  const secondOrder = [];
+
+  for (const game of firstHalf) {
+    const newRound = game.round + numFirstRounds;
+    const gameId = `drr-r${newRound}-g${game.position}`;
+    const rematch = createGame({
+      id: gameId,
+      round: newRound,
+      roundName: `Round ${newRound}, Game ${game.position}`,
+      position: game.position,
+      bracket: 'main',
+      slots: [
+        { sourceGameId: null, sourceOutcome: null, seed: null },
+        { sourceGameId: null, sourceOutcome: null, seed: null },
+      ],
+    });
+    // Swap team order for the return leg
+    rematch.teams = [
+      { teamId: game.teams[1].teamId, name: game.teams[1].name },
+      { teamId: game.teams[0].teamId, name: game.teams[0].name },
+    ];
+    rematch.status = 'ready';
+    secondHalf.push(rematch);
+    secondOrder.push(gameId);
+  }
+
+  return {
+    games: [...firstHalf, ...secondHalf],
+    defaultGameOrder: [...firstOrder, ...secondOrder],
+  };
+}

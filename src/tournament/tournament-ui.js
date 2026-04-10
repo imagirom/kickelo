@@ -26,6 +26,7 @@ const FORMAT_LABELS = {
   double_elim: 'Double Elimination',
   swiss: 'Swiss',
   round_robin: 'Round Robin',
+  double_round_robin: 'Double Round Robin',
 };
 
 const STATE_LABELS = {
@@ -274,6 +275,7 @@ function renderSetupView(t) {
       <option value="double_elim" ${t.format === 'double_elim' ? 'selected' : ''}>Double Elimination</option>
       <option value="swiss" ${t.format === 'swiss' ? 'selected' : ''}>Swiss</option>
       <option value="round_robin" ${t.format === 'round_robin' ? 'selected' : ''}>Round Robin</option>
+      <option value="double_round_robin" ${t.format === 'double_round_robin' ? 'selected' : ''}>Double Round Robin</option>
     </select>
   </div>`;
 
@@ -713,7 +715,7 @@ function renderBracketVisualization(t) {
     return renderSwissStandings(t);
   }
 
-  if (t.format === 'round_robin') {
+  if (t.format === 'round_robin' || t.format === 'double_round_robin') {
     return renderRoundRobinStandings(t);
   }
 
@@ -833,6 +835,7 @@ function bindBracketTabs(t) {
 // =========================================================================
 
 function estimateGameCount(numTeams, format, config = {}) {
+  if (numTeams < 2) return 0;
   switch (format) {
     case 'single_elim':
       return numTeams - 1;
@@ -847,6 +850,8 @@ function estimateGameCount(numTeams, format, config = {}) {
     }
     case 'round_robin':
       return numTeams * (numTeams - 1) / 2;
+    case 'double_round_robin':
+      return numTeams * (numTeams - 1);
     default:
       return '?';
   }

@@ -27,6 +27,7 @@ import {
   generateSwissFirstRound,
   generateSwissRound,
   generateRoundRobinSchedule,
+  generateDoubleRoundRobinSchedule,
 } from '../src/tournament/tournament-formats.js';
 
 let passed = 0;
@@ -833,6 +834,178 @@ console.log(`\n=== getDownstreamGames — no downstream for final ===`);
 
   const downstream = getDownstreamGames(t, 'f');
   assertEq(downstream.length, 0, 'final has no downstream');
+}
+
+// ===========================================================================
+console.log('\n=== Double Round Robin — 4 teams ===');
+// ===========================================================================
+
+{
+  const teams = makeTeams(4);
+  const { games, defaultGameOrder } = generateDoubleRoundRobinSchedule(teams);
+
+  // 4 teams: each pair plays twice → 4*3/2 * 2 = 12 games
+  assertEq(games.length, 12, '4 teams → 12 DRR games');
+  assertEq(defaultGameOrder.length, 12, '12 games in order');
+
+  // All games should be ready
+  assert(games.every(g => g.status === 'ready'), 'all DRR games ready');
+
+  // Each pair should appear exactly twice
+  const matchupCounts = new Map();
+  for (const game of games) {
+    const pair = [game.teams[0].teamId, game.teams[1].teamId].sort().join('|');
+    matchupCounts.set(pair, (matchupCounts.get(pair) || 0) + 1);
+  }
+  assertEq(matchupCounts.size, 6, '6 unique pairs');
+  for (const [pair, count] of matchupCounts) {
+    assertEq(count, 2, `${pair} plays exactly twice`);
+  }
+
+  // Each team plays 6 games (3 opponents × 2)
+  for (const team of teams) {
+    const count = games.filter(g =>
+      g.teams[0].teamId === team.id || g.teams[1].teamId === team.id
+    ).length;
+    assertEq(count, 6, `${team.name} plays 6 games`);
+  }
+
+  // Second half should have swapped team order compared to first half
+  const firstHalf = games.slice(0, 6);
+  const secondHalf = games.slice(6);
+  for (let i = 0; i < firstHalf.length; i++) {
+    assertEq(secondHalf[i].teams[0].teamId, firstHalf[i].teams[1].teamId,
+      `game ${i}: second half team0 = first half team1`);
+    assertEq(secondHalf[i].teams[1].teamId, firstHalf[i].teams[0].teamId,
+      `game ${i}: second half team1 = first half team0`);
+  }
+
+  // Play all and verify completion + rankings
+  const t = makeTournament(teams, 'double_round_robin', games, defaultGameOrder);
+  for (const game of games) {
+    completeGame(t, game.id, 0, `match-${game.id}`, [5, 3]);
+  }
+  assert(isTournamentComplete(t), 'DRR complete');
+
+  const rankings = computeFinalRankings(t);
+  assertEq(rankings.length, 4, 'all teams ranked in DRR');
+}
+
+// ===========================================================================
+console.log('\n=== Double Round Robin — 3 teams (odd) ===');
+// ===========================================================================
+
+{
+  const teams = makeTeams(3);
+  const { games } = generateDoubleRoundRobinSchedule(teams);
+
+  // 3 teams: 3*2/2 * 2 = 6 games
+  assertEq(games.length, 6, '3 teams → 6 DRR games');
+
+  // Each team plays 4 games
+  for (const team of teams) {
+    const count = games.filter(g =>
+      g.teams[0].teamId === team.id || g.teams[1].teamId === team.id
+    ).length;
+    assertEq(count, 4, `${team.name} plays 4 games`);
+  }
+}
+
+// ===========================================================================
+console.log('\n=== Double Round Robin — 5 teams (odd) ===');
+// ===========================================================================
+
+{
+  const teams = makeTeams(5);
+  const { games } = generateDoubleRoundRobinSchedule(teams);
+
+  // 5 teams: 5*4/2 * 2 = 20 games
+  assertEq(games.length, 20, '5 teams → 20 DRR games');
+
+  // Each team plays 8 games (4 opponents × 2)
+  for (const team of teams) {
+    const count = games.filter(g =>
+      g.teams[0].teamId === team.id || g.teams[1].teamId === team.id
+    ).length;
+    assertEq(count, 8, `${team.name} plays 8 games`);
+  }
+}
+
+// ===========================================================================
+console.log('\n=== Double Round Robin — validation ===');
+// ===========================================================================
+
+{
+  const result = validateTournamentSetup(
+    [{ id: 't1', name: 'A', players: ['p1', 'p2'] }, { id: 't2', name: 'B', players: ['p3', 'p4'] }],
+    'double_round_robin',
+    {}
+  );
+  assert(result.valid, 'double_round_robin is a valid format');
+
+  const bad = validateTournamentSetup(
+    [{ id: 't1', name: 'A', players: ['p1'] }],
+    'double_round_robin',
+    {}
+  );
+  assert(!bad.valid, 'DRR with 1 team is invalid');
+}
+
+// ===========================================================================
+console.log('\n=== estimateGameCount — correctness and edge cases ===');
+// ===========================================================================
+
+{
+  // Extracted estimateGameCount logic for testing
+  function estimateGameCount(numTeams, format, config = {}) {
+    if (numTeams < 2) return 0;
+    switch (format) {
+      case 'single_elim':
+        return numTeams - 1;
+      case 'double_elim': {
+        const total = 2 * numTeams - 2 + 1;
+        return config.grandFinalReset ? total + 1 : total;
+      }
+      case 'swiss': {
+        const rounds = config.swissRounds || Math.ceil(Math.log2(numTeams));
+        return Math.floor(numTeams / 2) * rounds;
+      }
+      case 'round_robin':
+        return numTeams * (numTeams - 1) / 2;
+      case 'double_round_robin':
+        return numTeams * (numTeams - 1);
+      default:
+        return '?';
+    }
+  }
+
+  // Edge cases that previously returned negative
+  assertEq(estimateGameCount(0, 'single_elim'), 0, 'SE 0 teams → 0 (not negative)');
+  assertEq(estimateGameCount(1, 'single_elim'), 0, 'SE 1 team → 0');
+  assertEq(estimateGameCount(0, 'double_elim'), 0, 'DE 0 teams → 0 (not negative)');
+  assertEq(estimateGameCount(1, 'double_elim'), 0, 'DE 1 team → 0');
+  assertEq(estimateGameCount(0, 'round_robin'), 0, 'RR 0 teams → 0');
+  assertEq(estimateGameCount(0, 'double_round_robin'), 0, 'DRR 0 teams → 0');
+
+  // Normal cases
+  assertEq(estimateGameCount(4, 'single_elim'), 3, 'SE 4 teams → 3');
+  assertEq(estimateGameCount(8, 'single_elim'), 7, 'SE 8 teams → 7');
+  assertEq(estimateGameCount(4, 'double_elim'), 7, 'DE 4 teams → 7');
+  assertEq(estimateGameCount(4, 'double_elim', { grandFinalReset: true }), 8, 'DE 4 teams + reset → 8');
+  assertEq(estimateGameCount(4, 'swiss'), 4, 'Swiss 4 teams → 4 (2 rounds)');
+  assertEq(estimateGameCount(4, 'swiss', { swissRounds: 3 }), 6, 'Swiss 4 teams 3 rounds → 6');
+  assertEq(estimateGameCount(4, 'round_robin'), 6, 'RR 4 teams → 6');
+  assertEq(estimateGameCount(5, 'round_robin'), 10, 'RR 5 teams → 10');
+  assertEq(estimateGameCount(4, 'double_round_robin'), 12, 'DRR 4 teams → 12');
+  assertEq(estimateGameCount(5, 'double_round_robin'), 20, 'DRR 5 teams → 20');
+
+  // All estimates must be non-negative for any valid team count
+  for (let n = 0; n <= 16; n++) {
+    for (const fmt of ['single_elim', 'double_elim', 'swiss', 'round_robin', 'double_round_robin']) {
+      const count = estimateGameCount(n, fmt);
+      assert(count >= 0, `estimateGameCount(${n}, '${fmt}') = ${count} ≥ 0`);
+    }
+  }
 }
 
 // ===========================================================================
