@@ -31,9 +31,11 @@ The app is production‑ready, with real‑time Firestore updates, a modular ES�
 ## Core Features
 
 - **Match entry:** Manual scoring or live mode with goal log and duration tracking.
+- **Match editing:** Edit scores, swap teams/scores, or soft-delete matches via the recent matches display.
 - **1v1 + 2v2 support:** Team sizes must match; the same player can be selected twice for 1v1.
 - **Role‑based Elo:** Offense/defense Elo only updates when positions are confirmed.
 - **Ranked matches:** Matches can be flagged as ranked/unranked.
+- **Tournaments:** Structured competitions with 5 formats (single/double elimination, Swiss, round robin, double round robin). Includes bracket visualization, automatic winner cascading, match editing with cascade support, and final rankings.
 - **Pause days:** Configurable date list to pause the app with an overlay.
 - **Pairing suggestions:** Session‑aware 2v2 suggestions using recency + waiting‑karma weighting.
 
@@ -50,20 +52,44 @@ The app is production‑ready, with real‑time Firestore updates, a modular ES�
     positionsConfirmed?, ranked?,
     goalLog?, matchDuration?,
     vibrationLogPath?,
-    pairingMetadata?
+    pairingMetadata?,
+    tournamentId?, tournamentGameId?,
+    tournamentGameName?, tournamentName?,
+    edited?, editedAt?, editHistory?,
+    deleted?
   }
   ```
   - `teamA`/`teamB` are arrays with length 1 (1v1) or 2 (2v2).
   - `pairingMetadata` tracks pairing origin and waiting players.
+  - Tournament fields link a match to a tournament game for cross-referencing.
+- **Tournaments:** Single documents at `/tournaments/{id}` containing:
+  ```
+  {
+    name, format, state (setup|in_progress|completed|deleted),
+    teams[], games[], defaultGameOrder[],
+    config { seedingMode, swissRounds?, grandFinalReset? },
+    adminPassword?,
+    finalRankings?,
+    createdAt, lockedAt?, completedAt?, deletedAt?
+  }
+  ```
+  - Games are embedded as an array of `TournamentGame` objects with DAG slots for winner/loser cascading.
 
 ## File‑by‑File Highlights
 
 ### App & UI
 - `src/app.js`: App bootstrap, auth gate, listener lifecycle, pause screen.
-- `src/match-form-handler.js`: Validation, live mode, Elo updates, match writes, vibration logs.
-- `src/leaderboard-display.js`, `src/recent-matches-display.js`: Core UI views.
+- `src/match-form-handler.js`: Validation, live mode, Elo updates, match writes, vibration logs, tournament game integration.
+- `src/match-edit-service.js`, `src/match-edit-modal.js`: Match editing logic and UI with tournament cascade support.
+- `src/leaderboard-display.js`, `src/recent-matches-display.js`: Core UI views (recent matches includes tournament context tags).
 - `src/player-stats-component.js`: Player modal with charts and tables.
 - `src/match-timeline.js`: SVG timeline rendering for goal logs.
+
+### Tournaments
+- `src/tournament/tournament-engine.js`: Pure-function DAG engine — game completion, winner cascading, rankings, validation.
+- `src/tournament/tournament-formats.js`: Bracket/schedule generators for all 5 formats.
+- `src/tournament/tournament-service.js`: Firestore CRUD, tournament locking, game completion, match editing cascade.
+- `src/tournament/tournament-ui.js`: UI rendering, bracket visualization, event binding, format selection.
 
 ### Data & Analytics
 - `src/firebase-service.js`: Firebase init + persistence, emulator hooks (commented).
@@ -80,7 +106,8 @@ The app is production‑ready, with real‑time Firestore updates, a modular ES�
 ## Testing
 
 - Tests live in `test/`
-- Run stats tests with `npm run test:stats` or all with `npm test`
+- `npm test` runs all suites: stats, cache, match editing, tournament engine
+- `test/tournament-engine.test.js` covers all formats, DAG cascading, rankings, editing, and game count validation (~290 tests)
 
 ## Performance Optimizations
 

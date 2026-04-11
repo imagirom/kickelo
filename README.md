@@ -10,6 +10,8 @@ Kickelo is a web app for tracking foosball matches with Elo (overall + role‑ba
 - Leaderboards, streaks, badges, and player stats charts
 - 2v2 pairing suggestions with waiting‑karma logic
 - Season selection with optional K‑factor overrides
+- Match editing with goal log handling and soft delete
+- **Tournaments** — structured competitions with bracket/schedule management (see below)
 - Optional vibration log uploads to Firebase Storage
 
 ## Tech Stack
@@ -57,6 +59,8 @@ Or run individual suites:
 ```bash
 npm run test:stats
 npm run test:cache
+npm run test:edit
+npm run test:tournament
 ```
 
 ## Firebase Emulators
@@ -69,6 +73,46 @@ npm run test:cache
 ```bash
 firebase emulators:start
 ```
+
+## Tournaments
+
+Kickelo supports structured tournaments with fixed teams and automatic bracket/schedule management.
+
+### Supported Formats
+
+| Format | Description | Games for N teams |
+|--------|-------------|-------------------|
+| Single Elimination | Standard knockout bracket (padded to next power of 2 with byes) | N − 1 |
+| Double Elimination | Winners + losers brackets with grand final | ~2N − 1 |
+| Swiss | Pairing based on standings each round; configurable round count | ⌊N/2⌋ × rounds |
+| Round Robin | Every pair plays once | N(N−1)/2 |
+| Double Round Robin | Every pair plays twice (home/away swapped in second half) | N(N−1) |
+
+### Tournament Lifecycle
+
+1. **Create** — give it a name and optionally an admin password (stored but not enforced yet).
+2. **Setup** — add teams (1 or 2 players each; all teams must be the same size), choose a format, and configure options (seeding mode, Swiss rounds, etc.).
+3. **Lock** — confirms the bracket/schedule. Games are generated and the tournament moves to `in_progress`. This cannot be undone.
+4. **Play** — select the next game or pick any ready game from the list. Players are auto-filled in the match form. Tournament games count as normal ranked matches.
+5. **Complete** — once all games are played, final rankings are computed. A "Re-do" button lets you create a new tournament with the same teams and seeding.
+
+### Key Behaviours
+
+- **Editing tournament matches**: Allowed as long as no downstream game (that depends on the result) has been played. Editing cascades updated winners to subsequent rounds.
+- **Soft delete**: Tournaments and matches can be marked as deleted without removing data.
+- **Tournament context**: Recent matches display shows the tournament name and game name (e.g. "Summer Cup — Semi-Final 1").
+- **Normal games**: Can be played freely between tournament games.
+
+### Data Model
+
+Tournaments are stored as single Firestore documents (`/tournaments/{id}`) with an embedded games array. Match documents link back via `tournamentId`, `tournamentGameId`, `tournamentGameName`, and `tournamentName` fields.
+
+### Source Files
+
+- `src/tournament/tournament-engine.js` — pure-function DAG engine (complete, uncomplete, rankings, validation)
+- `src/tournament/tournament-formats.js` — bracket/schedule generators for all formats
+- `src/tournament/tournament-service.js` — Firestore CRUD, lock, game completion
+- `src/tournament/tournament-ui.js` — UI rendering, bracket visualization, event binding
 
 ## Notifications (Opt-in)
 

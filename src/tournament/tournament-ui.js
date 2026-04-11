@@ -405,8 +405,9 @@ function bindSetupEvents(t) {
     }
 
     const gameCount = estimateGameCount(t.teams.length, t.format, t.config);
+    const approx = t.format === 'double_elim' ? '~' : '';
     const confirmed = await showConfirm(
-      `Lock tournament "${t.name}" with ${t.teams.length} teams in ${FORMAT_LABELS[t.format]}?\n\nThis will create ~${gameCount} games. This cannot be undone.`,
+      `Lock tournament "${t.name}" with ${t.teams.length} teams in ${FORMAT_LABELS[t.format]}?\n\nThis will create ${approx}${gameCount} games. This cannot be undone.`,
       { type: 'warning', confirmLabel: '🔒 Lock In' }
     );
     if (!confirmed) return;
