@@ -35,10 +35,10 @@ function createMatchListItem(match) {
     const deltaHtml = match.deleted || match.ranked === false
         ? (match.ranked === false && !match.deleted ? '<span class="match-elo-badge unranked">unranked</span>' : '')
         : deltaDisplay > 0
-            ? `<span class="match-elo-badge positive">▲ ${deltaDisplay}</span>`
+            ? `<span class="match-elo-badge positive">Δ ${deltaDisplay}</span>`
             : deltaDisplay < 0
-                ? `<span class="match-elo-badge negative">▼ ${Math.abs(deltaDisplay)}</span>`
-                : `<span class="match-elo-badge neutral">± 0</span>`;
+                ? `<span class="match-elo-badge negative">Δ ${deltaDisplay}</span>`
+                : `<span class="match-elo-badge neutral">Δ 0</span>`;
 
     // Edited / deleted / tournament indicators
     const deletedTag = match.deleted

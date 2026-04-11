@@ -119,7 +119,6 @@ h2 {
 .section-heading {
   margin-top: 40px;
   padding-top: 20px;
-  border-top: 1px solid #3a3a3a;
 }
 
 .svg-wrapper {
@@ -288,13 +287,6 @@ button:hover {
   background-color: #6f6f6f;
 }
 
-/* Primary action button */
-.btn-primary {
-  background-color: #2d7d46;
-}
-.btn-primary:hover {
-  background-color: #3a9957;
-}
 
 /* Match form button row */
 .match-form-buttons {
@@ -1709,14 +1701,10 @@ body.paused > *:not(#pauseOverlay) {
   flex-shrink: 0;
   margin-left: 6px;
 }
-.match-elo-badge.positive {
-  color: #6ecf6e;
-}
-.match-elo-badge.negative {
-  color: #e07a7a;
-}
+.match-elo-badge.positive,
+.match-elo-badge.negative,
 .match-elo-badge.neutral {
-  color: #888;
+  color: var(--text-color-secondary);
 }
 .match-elo-badge.unranked {
   color: #888;
