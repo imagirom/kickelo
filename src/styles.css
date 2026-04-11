@@ -70,16 +70,15 @@ body {
 h1 {
   text-align: center;
   color: #ccc;
-  margin-bottom: 20px;
-  /* text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); */
+  margin-bottom: 5px;
 }
 
 .github-line {
   text-align: center;
   color: var(--text-color-secondary);
-  margin-top: -10px;
-  margin-bottom: 20px;
-  font-size: 0.95rem;
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 0.85rem;
 }
 
 .github-line a {
@@ -94,9 +93,9 @@ h1 {
 
 .notification-opt-in {
   text-align: center;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
   color: var(--text-color-secondary);
-  font-size: 0.95rem;
+  font-size: 0.85rem;
 }
 
 .notification-opt-in label {
