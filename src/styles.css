@@ -116,7 +116,12 @@ h2 {
   color: #ccc;
   margin-top: 30px;
   margin-bottom: 10px;
-  /* text-shadow: 0 1.5px 3px rgba(0, 0, 0, 0.2); */
+}
+
+.section-heading {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid #3a3a3a;
 }
 
 .svg-wrapper {
@@ -422,7 +427,7 @@ button:hover {
 
 .shared-list li {
   background: #454545;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
   padding: 10px;
   border-radius: 4px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
