@@ -52,7 +52,7 @@ if (import.meta.env.DEV) {
     // Firestore emulator
     connectFirestoreEmulator(db, '127.0.0.1', 7070);
     // Auth emulator
-    // connectAuthEmulator(auth, 'http://127.0.0.1:9099');
+    connectAuthEmulator(auth, 'http://127.0.0.1:9099');
     // Storage emulator
     // connectStorageEmulator(storage, '127.0.0.1', 9199);
 }

@@ -546,11 +546,12 @@ function bindCompletedEvents(t) {
         confirmLabel: '🔄 Re-do',
         type: 'info',
         contentElement: (() => {
-          const el = document.createElement('div');
-          el.innerHTML = `<input type="text" id="redoTournamentName" value="${escapeHtml(defaultName)}" 
-            style="width:100%;padding:8px;margin-top:8px;border-radius:4px;border:1px solid #555;background:#333;color:#eee;font-size:0.95em;"
+            const el = document.createElement('div');
+            el.style.textAlign = 'center';
+            el.innerHTML = `<input type="text" id="redoTournamentName" value="${escapeHtml(defaultName)}" 
+            style="width:95%;padding:8px;margin-top:8px;margin-left:auto;margin-right:auto;border-radius:4px;border:1px solid #555;background:#333;color:#eee;font-size:0.95em;display:block;"
             placeholder="New tournament name">`;
-          return el;
+            return el;
         })()
       }
     );

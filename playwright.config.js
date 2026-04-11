@@ -1,4 +1,4 @@
-import { defineConfig } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
@@ -8,9 +8,23 @@ export default defineConfig({
     headless: true,
     screenshot: 'off',
   },
+  projects: [
+    {
+      name: 'desktop',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'mobile',
+      use: {
+        ...devices['Pixel 7'],
+        // Use Chromium (already installed) instead of WebKit
+        browserName: 'chromium',
+      },
+    },
+  ],
   webServer: [
     {
-      command: 'npx firebase emulators:start --only firestore --import=./firebase_emulator_cache',
+      command: 'npx firebase emulators:start --only firestore,auth --import=./firebase_emulator_cache',
       port: 7070,
       reuseExistingServer: true,
       timeout: 30000,
