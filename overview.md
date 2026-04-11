@@ -68,7 +68,6 @@ The app is production‑ready, with real‑time Firestore updates, a modular ES�
     name, format, state (setup|in_progress|completed|deleted),
     teams[], games[], defaultGameOrder[],
     config { seedingMode, swissRounds?, grandFinalReset? },
-    adminPassword?,
     finalRankings?,
     createdAt, lockedAt?, completedAt?, deletedAt?
   }

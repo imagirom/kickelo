@@ -90,7 +90,7 @@ Kickelo supports structured tournaments with fixed teams and automatic bracket/s
 
 ### Tournament Lifecycle
 
-1. **Create** — give it a name and optionally an admin password (stored but not enforced yet).
+1. **Create** — give it a name.
 2. **Setup** — add teams (1 or 2 players each; all teams must be the same size), choose a format, and configure options (seeding mode, Swiss rounds, etc.).
 3. **Lock** — confirms the bracket/schedule. Games are generated and the tournament moves to `in_progress`. This cannot be undone.
 4. **Play** — select the next game or pick any ready game from the list. Players are auto-filled in the match form. Tournament games count as normal ranked matches.

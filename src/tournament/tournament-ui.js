@@ -85,7 +85,6 @@ function renderList() {
   // Create button
   html += `<div class="tournament-create-form" id="tournamentCreateForm" style="display:none;">
     <input type="text" id="tournamentNameInput" placeholder="Tournament name" maxlength="60" />
-    <input type="password" id="tournamentPasswordInput" placeholder="Admin password (optional)" />
     <div class="tournament-create-row">
       <button id="tournamentCreateConfirm">Create</button>
       <button id="tournamentCreateCancel" style="background:#3a3a3a;">Cancel</button>
@@ -125,7 +124,6 @@ function renderList() {
   const confirmBtn = container.querySelector('#tournamentCreateConfirm');
   const cancelBtn = container.querySelector('#tournamentCreateCancel');
   const nameInput = container.querySelector('#tournamentNameInput');
-  const passwordInput = container.querySelector('#tournamentPasswordInput');
 
   createBtn.addEventListener('click', () => {
     createForm.style.display = createForm.style.display === 'none' ? 'block' : 'none';
@@ -143,7 +141,7 @@ function renderList() {
     if (!name) { nameInput.focus(); return; }
     confirmBtn.disabled = true;
     try {
-      const id = await createTournament(name, passwordInput.value || null);
+      const id = await createTournament(name);
       selectedTournamentId = id;
       currentView = 'detail';
       // Will re-render on snapshot update
@@ -538,7 +536,6 @@ function renderCompletedView(t) {
 }
 
 function bindCompletedEvents(t) {
-  const container = document.getElementById('tournamentDetail');
   if (!container) return;
 
   container.querySelector('#tournamentRedoBtn')?.addEventListener('click', async () => {

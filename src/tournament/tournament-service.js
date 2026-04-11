@@ -91,7 +91,7 @@ export async function fetchTournament(id) {
 /**
  * Create a new tournament in setup state.
  */
-export async function createTournament(name, adminPassword = null) {
+export async function createTournament(name) {
   if (!name || !name.trim()) throw new Error('Tournament name is required');
 
   const data = {
@@ -102,7 +102,6 @@ export async function createTournament(name, adminPassword = null) {
     lockedAt: null,
     completedAt: null,
     deletedAt: null,
-    adminPassword: adminPassword || null,
     teams: [],
     config: { seedingMode: 'elo' },
     games: [],
@@ -491,7 +490,6 @@ export async function cloneTournament(tournamentId, newName) {
     lockedAt: null,
     completedAt: null,
     deletedAt: null,
-    adminPassword: t.adminPassword || null,
     teams: clonedTeams,
     config: { ...t.config },
     games: [],
