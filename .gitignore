@@ -80,3 +80,8 @@ node_modules/
 # Playwright
 e2e/screenshots/
 test-results/
+
+# Temporary/generated
+firebase_emulator_cache_backup/
+.playwright-mcp/
+*.png
