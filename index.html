@@ -302,12 +302,12 @@
       <button id="toggleLiveMode" type="button">Start live mode</button>
     </div>
       <span id="liveModeStatus" style="font-size: 0.9em; color: #888;"></span>
-    <div id="liveMatchPanel" style="display: none; flex-direction: column; gap: 8px; margin-bottom: 10px;">
-      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 2px;">
-        <span id="liveMatchTimer" style="font-size: 1.2em; font-family: monospace; background: #222; border-radius: 4px; padding: 2.5px 10px; min-width: 60px; text-align: center; display: none;">00:00</span>
-        <button id="cancelLiveMode" type="button" style="display: none; background-color: #333">Cancel</button>
+    <div id="liveMatchPanel" class="live-panel" style="display: none;">
+      <div class="live-panel-header">
+        <span id="liveMatchTimer" class="live-timer" style="display: none;">00:00</span>
+        <button id="cancelLiveMode" type="button" class="live-cancel-btn" style="display: none;">Cancel</button>
       </div>
-      <div style="display: flex; gap: 10px;">
+      <div class="live-score-buttons">
         <button id="btnRedScored" type="button" class="red_select">Red scored</button>
         <button id="btnBlueScored" type="button" class="blue_select">Blue scored</button>
       </div>

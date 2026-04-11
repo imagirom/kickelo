@@ -583,6 +583,39 @@ button:hover {
   margin-bottom: 10px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
 }
+
+.live-panel {
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.live-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 2px;
+}
+
+.live-timer {
+  font-size: 1.2em;
+  font-family: monospace;
+  background: #222;
+  border-radius: 4px;
+  padding: 2.5px 10px;
+  min-width: 60px;
+  text-align: center;
+}
+
+.live-cancel-btn {
+  background-color: #333;
+}
+
+.live-score-buttons {
+  display: flex;
+  gap: 10px;
+}
+
 #liveMatchPanel button {
   font-size: 1em;
   padding: 6px 16px;
