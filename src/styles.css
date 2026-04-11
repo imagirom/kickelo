@@ -429,11 +429,76 @@ button:hover {
   font-size: 16px;
 }
 
-/*.shared-list li:hover {*/
-/*    transform: translateY(-2px);*/
-/*    box-shadow: 0 4px 8px rgba(0,0,0,0.2);*/
-/*}*/
+/* Leaderboard item layout */
+.leaderboard-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
 
+.leaderboard-player-info {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.leaderboard-rank {
+  color: #999;
+  font-size: 13px;
+  min-width: 18px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.leaderboard-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.leaderboard-value {
+  color: #aaa;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.leaderboard-indicators {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.leaderboard-badges {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.leaderboard-badge {
+  display: inline-flex;
+  align-items: baseline;
+}
+
+.leaderboard-badge-value {
+  margin-left: 2px;
+}
+
+.leaderboard-daily-change {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.leaderboard-daily-change.positive { color: #86e086; }
+.leaderboard-daily-change.negative { color: #ff7b7b; }
+
+/* Top 3 rank number styling */
+.gold .leaderboard-rank { color: #ffd700; font-weight: bold; }
+.silver .leaderboard-rank { color: #c0c0c0; font-weight: bold; }
+.bronze .leaderboard-rank { color: #cd7f32; font-weight: bold; }
 
 /* Metallic Effects for Top 3 Spots */
 .gold {

@@ -381,28 +381,41 @@ function renderTeamLeaderboard() {
         return;
     }
 
-    eligibleTeams.forEach((team, index) => {
+    eligibleTeams.forEach((team, idx) => {
         const li = document.createElement('li');
-        li.style.display = 'flex';
-        li.style.justifyContent = 'space-between';
-        li.style.alignItems = 'center';
+        li.classList.add('leaderboard-item');
         li.style.cursor = 'default';
 
-        const label = document.createElement('span');
-        const ratingValue = Math.round(team.rating ?? STARTING_ELO);
-        label.textContent = `${team.players.join(' + ')}: ${ratingValue}`;
+        const playerInfoSpan = document.createElement('span');
+        playerInfoSpan.classList.add('leaderboard-player-info');
+
+        const rankSpan = document.createElement('span');
+        rankSpan.classList.add('leaderboard-rank');
+        rankSpan.textContent = `${idx + 1}`;
+
+        const nameSpan = document.createElement('span');
+        nameSpan.classList.add('leaderboard-name');
+        nameSpan.textContent = team.players.join(' + ');
+
+        const valueSpan = document.createElement('span');
+        valueSpan.classList.add('leaderboard-value');
+        valueSpan.textContent = Math.round(team.rating ?? STARTING_ELO);
+
+        playerInfoSpan.appendChild(rankSpan);
+        playerInfoSpan.appendChild(nameSpan);
+        playerInfoSpan.appendChild(valueSpan);
 
         const meta = document.createElement('span');
         meta.textContent = `${team.games} games`;
         meta.style.fontSize = '0.9em';
         meta.style.color = 'var(--text-color-secondary, #666)';
 
-        li.appendChild(label);
+        li.appendChild(playerInfoSpan);
         li.appendChild(meta);
 
-        if (index === 0) li.classList.add('gold');
-        else if (index === 1) li.classList.add('silver');
-        else if (index === 2) li.classList.add('bronze');
+        if (idx === 0) li.classList.add('gold');
+        else if (idx === 1) li.classList.add('silver');
+        else if (idx === 2) li.classList.add('bronze');
 
         leaderboardList.appendChild(li);
     });
@@ -478,34 +491,40 @@ async function updateLeaderboardDisplay() {
 
     filteredPlayers.forEach((player) => {
         const li = document.createElement("li");
+        li.classList.add('leaderboard-item');
 
         const playerInfoSpan = document.createElement('span');
+        playerInfoSpan.classList.add('leaderboard-player-info');
+
+        const rankSpan = document.createElement('span');
+        rankSpan.classList.add('leaderboard-rank');
+        rankSpan.textContent = `${index + 1}`;
+
+        const nameSpan = document.createElement('span');
+        nameSpan.classList.add('leaderboard-name');
         const playerStats = allStats[player.name];
-        const displayValue = getDisplayValue(player, playerStats, sortBy);
-        
-        // append a heart emoji only if the player name is "Julia"
-        if (player.name === "Julia") {
-            playerInfoSpan.textContent = `${player.name} ❤️: ${displayValue}`;
-        } else {
-            playerInfoSpan.textContent = `${player.name}: ${displayValue}`;
-        }
+        const playerName = player.name === "Julia" ? `${player.name} ❤️` : player.name;
+        nameSpan.textContent = playerName;
+
+        const valueSpan = document.createElement('span');
+        valueSpan.classList.add('leaderboard-value');
+        valueSpan.textContent = getDisplayValue(player, playerStats, sortBy);
+
+        playerInfoSpan.appendChild(rankSpan);
+        playerInfoSpan.appendChild(nameSpan);
+        playerInfoSpan.appendChild(valueSpan);
 
         const indicatorsContainer = document.createElement('span');
-        indicatorsContainer.style.display = 'flex';
-        indicatorsContainer.style.alignItems = 'center';
-        indicatorsContainer.style.gap = '15px';
+        indicatorsContainer.classList.add('leaderboard-indicators');
         
         if (playerStats) {
             const statusBadges = getStatusBadges(playerStats);
             if (statusBadges.length > 0) {
                 const badgesContainer = document.createElement('span');
-                badgesContainer.style.display = 'flex';
-                badgesContainer.style.gap = '8px';
-                badgesContainer.style.alignItems = 'center';
+                badgesContainer.classList.add('leaderboard-badges');
                 statusBadges.forEach((badge) => {
                     const badgeSpan = document.createElement('span');
-                    badgeSpan.style.display = 'inline-flex';
-                    badgeSpan.style.alignItems = 'baseline';
+                    badgeSpan.classList.add('leaderboard-badge');
                     const emojiSpan = document.createElement('span');
                     emojiSpan.textContent = badge.emoji;
                     if (badge.emojiColor) {
@@ -514,11 +533,11 @@ async function updateLeaderboardDisplay() {
                     badgeSpan.appendChild(emojiSpan);
 
                     if (badge.value !== undefined) {
-                        const valueSpan = document.createElement('span');
-                        valueSpan.textContent = badge.value;
-                        valueSpan.style.marginLeft = '2px';
-                        valueSpan.style.color = badge.valueColor || DEFAULT_BADGE_VALUE_COLOR;
-                        badgeSpan.appendChild(valueSpan);
+                        const bvSpan = document.createElement('span');
+                        bvSpan.textContent = badge.value;
+                        bvSpan.classList.add('leaderboard-badge-value');
+                        bvSpan.style.color = badge.valueColor || DEFAULT_BADGE_VALUE_COLOR;
+                        badgeSpan.appendChild(bvSpan);
                     }
                     badgesContainer.appendChild(badgeSpan);
                 });
@@ -529,12 +548,13 @@ async function updateLeaderboardDisplay() {
             const dailyChange = playerStats.dailyEloChange;
             if (dailyChange) {
                 const changeSpan = document.createElement('span');
+                changeSpan.classList.add('leaderboard-daily-change');
                 if (dailyChange > 0) {
                     changeSpan.textContent = `▲ ${Math.round(dailyChange)}`;
-                    changeSpan.style.color = '#86e086';
+                    changeSpan.classList.add('positive');
                 } else if (dailyChange < 0) {
                     changeSpan.textContent = `▼ ${Math.round(Math.abs(dailyChange))}`;
-                    changeSpan.style.color = '#ff7b7b';
+                    changeSpan.classList.add('negative');
                 }
                 if (changeSpan.textContent) {
                     indicatorsContainer.appendChild(changeSpan);
@@ -544,11 +564,6 @@ async function updateLeaderboardDisplay() {
 
         li.appendChild(playerInfoSpan);
         li.appendChild(indicatorsContainer);
-
-        li.style.display = 'flex';
-        li.style.justifyContent = 'space-between';
-        li.style.alignItems = 'center';
-        li.style.cursor = "pointer";
 
         li.addEventListener("click", () => {
             if (onPlayerClickCallback) {
