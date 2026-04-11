@@ -76,3 +76,7 @@ node_modules/
 
 # chrome devtools file
 .well-known/appspecific/com.chrome.devtools.json
+
+# Playwright
+e2e/screenshots/
+test-results/

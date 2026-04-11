@@ -11,9 +11,11 @@
     "test:cache": "node test/stats-cache-integration.test.js",
     "test:edit": "node test/match-edit-service.test.js",
     "test:tournament": "node test/tournament-engine.test.js",
+    "test:e2e": "npx playwright test",
     "test": "npm run test:stats && npm run test:cache && npm run test:edit && npm run test:tournament"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "vite": "^7.0.4"
   },
   "dependencies": {
