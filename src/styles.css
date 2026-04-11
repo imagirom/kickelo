@@ -1687,7 +1687,6 @@ body.paused > *:not(#pauseOverlay) {
   margin-left: 6px;
   white-space: nowrap;
 }
-}
 
 /* Goal log warning in change summary */
 .edit-modal-change-item.goal-log-warning {
@@ -2021,12 +2020,12 @@ body.paused > *:not(#pauseOverlay) {
   font-size: 0.85em;
   color: var(--text-color-secondary);
   min-width: 50px;
-  text-align: right;
+  text-align: center;
 }
 
 .tournament-game-status {
   font-size: 0.75em;
-  padding: 2px 6px;
+  padding: 2px 2px;
   border-radius: 4px;
   min-width: 60px;
   text-align: center;
@@ -2034,7 +2033,7 @@ body.paused > *:not(#pauseOverlay) {
 
 .tournament-game-status.ready { background: #2d5a3d; color: #7fd4a0; }
 .tournament-game-status.waiting { background: #3a3a3a; color: #888; }
-.tournament-game-status.completed { background: #3a3a1a; color: #b0a050; }
+.tournament-game-status.completed { background: #5f5f15; color: #fae163; }
 
 /* Play next game button */
 .tournament-play-btn {
@@ -2111,8 +2110,8 @@ body.paused > *:not(#pauseOverlay) {
 
 /* Tournament match banner */
 .tournament-match-banner {
-  background: #3a3a1a;
-  border: 1px solid #5a5a2a;
+  background: #46460d;
+  border: 2px solid #96961f;
   border-radius: 6px;
   padding: 10px 14px;
   margin-bottom: 12px;
@@ -2122,17 +2121,19 @@ body.paused > *:not(#pauseOverlay) {
 .tournament-match-banner .banner-title {
   font-weight: bold;
   color: #d4b050;
+  text-shadow: 1px 1px 2px #0c1821;
+  font-size: 1.2em;
 }
 
 .tournament-match-banner .banner-game {
-  color: var(--text-color-secondary);
-  font-size: 0.9em;
+  color: var(--text-color-primary);
+  /* font-size: 0.9em; */
 }
 
 .tournament-match-banner .banner-cancel {
   width: auto;
   padding: 4px 10px;
-  font-size: 0.8em;
+  font-size: 0.9em;
   margin-top: 6px;
   background: #5a3a3a;
   display: inline-block;
