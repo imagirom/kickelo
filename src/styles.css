@@ -304,6 +304,20 @@ button:hover {
   background-color: #6f6f6f;
 }
 
+/* Primary action button */
+.btn-primary {
+  background-color: #2d7d46;
+}
+.btn-primary:hover {
+  background-color: #3a9957;
+}
+
+/* Match form button row */
+.match-form-buttons {
+  display: flex;
+  gap: 10px;
+}
+
 .live-mode-controls {
   display: flex;
   flex-direction: column;
