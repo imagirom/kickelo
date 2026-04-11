@@ -31,6 +31,15 @@ function createMatchListItem(match) {
             ? '(unranked)'
             : `(Elo Δ: ${deltaDisplay})`;
 
+    // Colored elo delta badge for the right side
+    const deltaHtml = match.deleted || match.ranked === false
+        ? (match.ranked === false && !match.deleted ? '<span class="match-elo-badge unranked">unranked</span>' : '')
+        : deltaDisplay > 0
+            ? `<span class="match-elo-badge positive">▲ ${deltaDisplay}</span>`
+            : deltaDisplay < 0
+                ? `<span class="match-elo-badge negative">▼ ${Math.abs(deltaDisplay)}</span>`
+                : `<span class="match-elo-badge neutral">± 0</span>`;
+
     // Edited / deleted / tournament indicators
     const deletedTag = match.deleted
         ? '<span class="match-deleted-tag">(deleted)</span>'
@@ -51,7 +60,7 @@ function createMatchListItem(match) {
     const topRow = document.createElement('div');
     topRow.style.display = 'flex';
     topRow.style.alignItems = 'center';
-    topRow.innerHTML = `<span class="match-result-text" style="flex: 1;">${winner} ${winnerGoals}:${loserGoals} ${loser} <span style="font-size: 0.9em; color: gray;">${deltaLabel}</span>${deletedTag}${editedTag}${tournamentTag}</span>`;
+    topRow.innerHTML = `<span class="match-result-text" style="flex: 1;">${winner} <strong>${winnerGoals}:${loserGoals}</strong> ${loser}${deletedTag}${editedTag}${tournamentTag}</span>${deltaHtml}`;
     if (match.deleted) {
         li.classList.add('match-deleted');
     }

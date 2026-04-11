@@ -1659,6 +1659,31 @@ body.paused > *:not(#pauseOverlay) {
   background: rgba(255, 255, 255, 0.12);
 }
 
+/* Elo delta badge on recent matches */
+.match-elo-badge {
+  font-size: 0.8em;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+.match-elo-badge.positive {
+  color: #6ecf6e;
+}
+.match-elo-badge.negative {
+  color: #e07a7a;
+}
+.match-elo-badge.neutral {
+  color: #888;
+}
+.match-elo-badge.unranked {
+  color: #888;
+  font-style: italic;
+  font-weight: normal;
+}
+
 /* Edited match indicator */
 .match-edited-tag {
   font-size: 0.75em;
