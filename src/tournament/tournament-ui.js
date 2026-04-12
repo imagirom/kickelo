@@ -616,7 +616,7 @@ function renderGameList(t) {
         <span class="tournament-game-matchup">${t0} vs ${t1}</span>
         <span class="tournament-game-score">${scoreText}</span>
         <span class="tournament-game-status ${statusClass}">${
-          game.status === 'completed' ? '✓' : game.status === 'ready' ? '▶ Play' : '⏳'
+          game.status === 'completed' ? '✓' : game.status === 'ready' ? '▶ Play' : 'Waiting'
         }</span>
       </li>`;
     }

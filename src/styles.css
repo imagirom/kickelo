@@ -2090,7 +2090,7 @@ body.paused > *:not(#pauseOverlay) {
 }
 
 .tournament-game-status.ready { background: #2d5a3d; color: #7fd4a0; }
-.tournament-game-status.waiting { background: #3a3a3a; color: #888; }
+.tournament-game-status.waiting { background: transparent; color: #666; font-style: italic; }
 .tournament-game-status.completed { background: #5f5f15; color: #fae163; }
 
 /* Play next game button */
@@ -2241,10 +2241,20 @@ body.paused > *:not(#pauseOverlay) {
 .bracket-round {
   display: flex;
   flex-direction: column;
-  justify-content: space-around;
+  justify-content: flex-start;
   min-width: 150px;
   padding: 0 4px;
 }
+
+/* Tree-style bracket: later rounds offset and space matches
+   to align with the midpoints of the previous round's pairs.
+   Match height = 60px, gap = 12px, slot = 72px. */
+.bracket-round:nth-child(2) > .bracket-round-header + .bracket-match { margin-top: 42px; }
+.bracket-round:nth-child(2) > .bracket-match ~ .bracket-match { margin-top: 84px; }
+.bracket-round:nth-child(3) > .bracket-round-header + .bracket-match { margin-top: 114px; }
+.bracket-round:nth-child(3) > .bracket-match ~ .bracket-match { margin-top: 228px; }
+.bracket-round:nth-child(4) > .bracket-round-header + .bracket-match { margin-top: 258px; }
+.bracket-round:nth-child(4) > .bracket-match ~ .bracket-match { margin-top: 516px; }
 
 .bracket-round-header {
   text-align: center;
