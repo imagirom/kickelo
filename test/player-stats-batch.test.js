@@ -1,6 +1,6 @@
 import { computeAllPlayerStats } from '../src/player-stats-batch.js';
 import { validateStats, printDetailedStats } from '../src/utils/player-stats-validator.js';
-import { BADGE_THRESHOLDS } from '../src/constants.js';
+import { BADGE_THRESHOLDS, TOURNAMENT_BADGE_DURATION_DAYS } from '../src/constants.js';
 
 // Mock MAX_GOALS for testing
 const MAX_GOALS = 5;
@@ -544,3 +544,193 @@ function testHattrickBadge() {
 }
 
 testHattrickBadge();
+
+// ============================================================
+// Tournament Badge Tests
+// ============================================================
+
+function testTournamentBadges() {
+    console.log('\n=== Testing tournament badges ===\n');
+    const now = Date.now();
+    const HOUR = 60 * 60 * 1000;
+    const DAY = 24 * HOUR;
+
+    // Create matches with a tournament completion stamp
+    const matches = [
+        // Recent match that completed a tournament (2 hours ago)
+        {
+            id: 'tourney-final',
+            teamA: ['Alice', 'Bob'],
+            teamB: ['Charlie', 'David'],
+            winner: 'A', goalsA: 5, goalsB: 3, eloDelta: 20,
+            timestamp: now - 2 * HOUR,
+            tournamentId: 'tournament1',
+            tournamentCompletion: {
+                tournamentId: 'tournament1',
+                tournamentName: 'Friday Cup',
+                completedAt: now - 2 * HOUR,
+                playerRankings: {
+                    'Alice': 1, 'Bob': 1,
+                    'Charlie': 2, 'David': 2,
+                    'Eve': 3, 'Frank': 3,
+                    'Grace': 4, 'Hank': 4,
+                },
+            },
+        },
+        // Earlier regular match
+        {
+            id: 'regular1',
+            teamA: ['Alice', 'Eve'],
+            teamB: ['Bob', 'Frank'],
+            winner: 'A', goalsA: 5, goalsB: 2, eloDelta: 15,
+            timestamp: now - 3 * HOUR,
+        },
+        // Even earlier match involving Grace and Hank
+        {
+            id: 'regular2',
+            teamA: ['Grace', 'Hank'],
+            teamB: ['Charlie', 'David'],
+            winner: 'B', goalsA: 3, goalsB: 5, eloDelta: 15,
+            timestamp: now - 4 * HOUR,
+        },
+    ];
+
+    const { players: stats } = computeAllPlayerStats(matches);
+
+    // Gold for Alice and Bob (rank 1)
+    if (stats['Alice'].tournamentBadges.gold !== 1) {
+        throw new Error(`Expected Alice gold=1, got ${stats['Alice'].tournamentBadges.gold}`);
+    }
+    if (stats['Bob'].tournamentBadges.gold !== 1) {
+        throw new Error(`Expected Bob gold=1, got ${stats['Bob'].tournamentBadges.gold}`);
+    }
+
+    // Silver for Charlie and David (rank 2)
+    if (stats['Charlie'].tournamentBadges.silver !== 1) {
+        throw new Error(`Expected Charlie silver=1, got ${stats['Charlie'].tournamentBadges.silver}`);
+    }
+
+    // Bronze for Eve and Frank (rank 3)
+    if (stats['Eve'].tournamentBadges.bronze !== 1) {
+        throw new Error(`Expected Eve bronze=1, got ${stats['Eve'].tournamentBadges.bronze}`);
+    }
+
+    // Participant for Grace and Hank (rank 4)
+    if (stats['Grace'].tournamentBadges.participant !== 1) {
+        throw new Error(`Expected Grace participant=1, got ${stats['Grace'].tournamentBadges.participant}`);
+    }
+
+    // No other badges for Alice
+    if (stats['Alice'].tournamentBadges.silver !== 0 || stats['Alice'].tournamentBadges.bronze !== 0) {
+        throw new Error('Alice should only have gold badge');
+    }
+
+    console.log('✓ Tournament badges assigned correctly by rank');
+}
+
+testTournamentBadges();
+
+function testTournamentBadgesExpired() {
+    console.log('\n=== Testing expired tournament badges ===\n');
+    const now = Date.now();
+    const HOUR = 60 * 60 * 1000;
+    const DAY = 24 * HOUR;
+
+    // Tournament completed beyond the badge duration window
+    const expiredTime = now - (TOURNAMENT_BADGE_DURATION_DAYS + 1) * DAY;
+
+    const matches = [
+        {
+            id: 'tourney-old',
+            teamA: ['Alice', 'Bob'],
+            teamB: ['Charlie', 'David'],
+            winner: 'A', goalsA: 5, goalsB: 3, eloDelta: 20,
+            timestamp: expiredTime,
+            tournamentCompletion: {
+                tournamentId: 'old-tournament',
+                tournamentName: 'Old Cup',
+                completedAt: expiredTime,
+                playerRankings: {
+                    'Alice': 1, 'Bob': 1,
+                    'Charlie': 2, 'David': 2,
+                },
+            },
+        },
+    ];
+
+    const { players: stats } = computeAllPlayerStats(matches);
+
+    if (stats['Alice'].tournamentBadges.gold !== 0) {
+        throw new Error(`Expected Alice gold=0 (expired), got ${stats['Alice'].tournamentBadges.gold}`);
+    }
+    if (stats['Charlie'].tournamentBadges.silver !== 0) {
+        throw new Error(`Expected Charlie silver=0 (expired), got ${stats['Charlie'].tournamentBadges.silver}`);
+    }
+
+    console.log('✓ Expired tournament badges correctly ignored');
+}
+
+testTournamentBadgesExpired();
+
+function testMultipleTournamentBadges() {
+    console.log('\n=== Testing multiple tournament badges ===\n');
+    const now = Date.now();
+    const HOUR = 60 * 60 * 1000;
+    const DAY = 24 * HOUR;
+
+    const matches = [
+        // Tournament 2 final (more recent)
+        {
+            id: 'tourney2-final',
+            teamA: ['Alice', 'Bob'],
+            teamB: ['Charlie', 'David'],
+            winner: 'A', goalsA: 5, goalsB: 4, eloDelta: 20,
+            timestamp: now - 1 * HOUR,
+            tournamentCompletion: {
+                tournamentId: 'tournament2',
+                tournamentName: 'Monday Cup',
+                completedAt: now - 1 * HOUR,
+                playerRankings: {
+                    'Alice': 1, 'Bob': 1,
+                    'Charlie': 2, 'David': 2,
+                },
+            },
+        },
+        // Tournament 1 final (older but still within window)
+        {
+            id: 'tourney1-final',
+            teamA: ['Alice', 'Charlie'],
+            teamB: ['Bob', 'David'],
+            winner: 'B', goalsA: 3, goalsB: 5, eloDelta: 20,
+            timestamp: now - 2 * DAY,
+            tournamentCompletion: {
+                tournamentId: 'tournament1',
+                tournamentName: 'Friday Cup',
+                completedAt: now - 2 * DAY,
+                playerRankings: {
+                    'Alice': 2, 'Charlie': 2,
+                    'Bob': 1, 'David': 1,
+                },
+            },
+        },
+    ];
+
+    const { players: stats } = computeAllPlayerStats(matches);
+
+    // Alice: gold from tournament2, silver from tournament1
+    if (stats['Alice'].tournamentBadges.gold !== 1) {
+        throw new Error(`Expected Alice gold=1, got ${stats['Alice'].tournamentBadges.gold}`);
+    }
+    if (stats['Alice'].tournamentBadges.silver !== 1) {
+        throw new Error(`Expected Alice silver=1, got ${stats['Alice'].tournamentBadges.silver}`);
+    }
+
+    // Bob: gold from both tournaments
+    if (stats['Bob'].tournamentBadges.gold !== 2) {
+        throw new Error(`Expected Bob gold=2, got ${stats['Bob'].tournamentBadges.gold}`);
+    }
+
+    console.log('✓ Multiple tournament badges aggregate correctly');
+}
+
+testMultipleTournamentBadges();

@@ -4,7 +4,7 @@ import {
   db, collection, doc, addDoc, getDoc, getDocs, updateDoc,
   query, where, orderBy, onSnapshot
 } from '../firebase-service.js';
-import { serverTimestamp } from 'firebase/firestore';
+import { serverTimestamp, deleteField } from 'firebase/firestore';
 import {
   initializeBracket, completeGame, isTournamentComplete,
   computeFinalRankings, validateTournamentSetup, generateTeamName,
@@ -288,6 +288,52 @@ export async function lockTournament(tournamentId, playerElos = {}) {
 }
 
 // =========================================================================
+// Tournament Completion Helpers
+// =========================================================================
+
+/**
+ * Build a player→rank map from tournament rankings and teams.
+ * Maps each player name to their team's rank.
+ */
+function buildPlayerRankings(tournament) {
+  const playerRankings = {};
+  for (const entry of tournament.finalRankings) {
+    const team = tournament.teams.find(t => t.id === entry.teamId);
+    if (!team) continue;
+    for (const player of team.players) {
+      playerRankings[player] = entry.rank;
+    }
+  }
+  return playerRankings;
+}
+
+/**
+ * Stamp tournamentCompletion data onto a match document.
+ * Called when a tournament completes to denormalize ranking data for stats.
+ */
+async function stampTournamentCompletion(matchId, tournament) {
+  const matchDocRef = doc(db, 'matches', matchId);
+  await updateDoc(matchDocRef, {
+    tournamentCompletion: {
+      tournamentId: tournament.id,
+      tournamentName: tournament.name,
+      completedAt: tournament.completedAt,
+      playerRankings: buildPlayerRankings(tournament),
+    },
+  });
+}
+
+/**
+ * Clear tournamentCompletion data from a match document.
+ */
+async function clearTournamentCompletion(matchId) {
+  const matchDocRef = doc(db, 'matches', matchId);
+  await updateDoc(matchDocRef, {
+    tournamentCompletion: deleteField(),
+  });
+}
+
+// =========================================================================
 // Game Completion
 // =========================================================================
 
@@ -321,6 +367,12 @@ export async function submitTournamentGameResult(tournamentId, gameId, winnerInd
   }
 
   await updateDoc(doc(db, TOURNAMENTS_COLLECTION, tournamentId), updates);
+
+  // Stamp tournament completion data on the match for badge computation
+  if (t.state === 'completed') {
+    await stampTournamentCompletion(matchId, t);
+  }
+
   return t;
 }
 
@@ -395,6 +447,8 @@ export async function updateTournamentGameResult(tournamentId, gameId, newWinner
   const t = await fetchTournament(tournamentId);
   if (!t) throw new Error('Tournament not found');
 
+  const wasCompleted = t.state === 'completed';
+
   // Uncomplete (validates no completed downstream internally)
   uncompleteGame(t, gameId);
 
@@ -418,6 +472,14 @@ export async function updateTournamentGameResult(tournamentId, gameId, newWinner
   }
 
   await updateDoc(doc(db, TOURNAMENTS_COLLECTION, tournamentId), updates);
+
+  // Update tournament completion stamp on match document
+  if (t.state === 'completed') {
+    await stampTournamentCompletion(matchId, t);
+  } else if (wasCompleted) {
+    // Tournament was un-completed — clear the stamp
+    await clearTournamentCompletion(matchId);
+  }
   return t;
 }
 

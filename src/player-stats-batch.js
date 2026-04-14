@@ -1,4 +1,4 @@
-import { MAX_GOALS, STARTING_ELO, INACTIVE_THRESHOLD_DAYS, BADGE_THRESHOLDS, CAKE_TEAM } from "./constants.js";
+import { MAX_GOALS, STARTING_ELO, INACTIVE_THRESHOLD_DAYS, BADGE_THRESHOLDS, CAKE_TEAM, TOURNAMENT_BADGE_DURATION_DAYS } from "./constants.js";
 import { expectedScore, updateRating } from "./elo-service.js";
 import { rate as rateOpenSkill, rating as createOpenSkillRating, ordinal as openskillOrdinal } from "openskill";
 
@@ -101,7 +101,8 @@ export function computeAllPlayerStats(matches, options = {}) {
             roleEloTrajectory: { offense: [], defense: [] },
             roleGames: { offense: 0, defense: 0 },
             _wallStreak: 0,
-            wallStreak: 0
+            wallStreak: 0,
+            tournamentBadges: { gold: 0, silver: 0, bronze: 0, participant: 0 },
         };
         stats[playerName]._medicEvents = [];
         stats[playerName]._weekdayActivityDays = new Set();
@@ -396,6 +397,22 @@ export function computeAllPlayerStats(matches, options = {}) {
                 const allActivePlayers = [...match.teamA, ...match.teamB, ...waitingPlayers];
                 for (const playerId of allActivePlayers) {
                     if (stats[playerId]) stats[playerId].statusEvents.cakeCount += 1;
+                }
+            }
+        }
+
+        // Tournament completion: award badges to all ranked players
+        if (match.tournamentCompletion) {
+            const tc = match.tournamentCompletion;
+            const badgeCutoff = Date.now() - TOURNAMENT_BADGE_DURATION_DAYS * MILLIS_PER_DAY;
+            if (tc.completedAt >= badgeCutoff && tc.playerRankings) {
+                for (const [player, rank] of Object.entries(tc.playerRankings)) {
+                    if (!stats[player]) continue;
+                    const tb = stats[player].tournamentBadges;
+                    if (rank === 1) tb.gold++;
+                    else if (rank === 2) tb.silver++;
+                    else if (rank === 3) tb.bronze++;
+                    else tb.participant++;
                 }
             }
         }

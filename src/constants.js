@@ -39,6 +39,9 @@ export const BADGE_THRESHOLDS = Object.freeze({
 // Cake team: when these two players are on the same winning team, everyone gets cake 🎂
 export const CAKE_TEAM = Object.freeze(['Sarah', 'Simon']);
 
+// Tournament badge configuration
+export const TOURNAMENT_BADGE_DURATION_DAYS = 7;
+
 // Match editing configuration
 export const MATCH_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
 export const MAX_EDITABLE_MATCHES = 10; // Only the N most recent matches can be edited

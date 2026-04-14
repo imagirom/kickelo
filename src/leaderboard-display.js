@@ -27,6 +27,10 @@ const BADGE_VALUE_COLORS = {
     '🪴': '#4ade51ff', // gardener
     'φ': '#fcd34d', // golden streak
     '🧱': '#a8a29e', // wall
+    '🥇': '#fbbf24', // tournament gold
+    '🥈': '#d1d5db', // tournament silver
+    '🥉': '#d97706', // tournament bronze
+    '⚽': '#86efac', // tournament participation
 };
 const BADGE_EMOJI_COLORS = {
     'φ': '#fcd34d',
@@ -364,6 +368,15 @@ export function getStatusBadges(stats) {
     const wallStreak = stats.wallStreak || 0;
     if (wallStreak >= 3) {
         badges.push(formatBadge('🧱', wallStreak, 0));
+    }
+
+    // Tournament placement badges
+    const tb = stats.tournamentBadges;
+    if (tb) {
+        if (tb.gold > 0) badges.push(formatBadge('🥇', tb.gold, 1));
+        if (tb.silver > 0) badges.push(formatBadge('🥈', tb.silver, 1));
+        if (tb.bronze > 0) badges.push(formatBadge('🥉', tb.bronze, 1));
+        if (tb.participant > 0) badges.push(formatBadge('⚽', tb.participant, 1));
     }
 
     return badges;
