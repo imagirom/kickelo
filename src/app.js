@@ -14,6 +14,7 @@ import { getSelectedSeason } from './season-service.js';
 import { initializeNotifications } from './notification-service.js';
 import { initializeActivityHeatmap } from './activity-heatmap.js';
 import { initializeTournamentUI } from './tournament/tournament-ui.js';
+import { handleRedirect, initSpotifyUI } from './audio/spotify-client.js';
 
 import { auth } from './firebase-service.js';
 import { onAuthStateChanged, signInWithEmailAndPassword, setPersistence, browserLocalPersistence, signOut } from 'firebase/auth';
@@ -152,6 +153,7 @@ if (isPauseDay()) {
     showPauseScreen();
 } else {
     hidePauseScreen();
+    handleRedirect(); // exchange ?code= for Spotify tokens, then clean the URL
         setupPasswordGate();
         setPersistence(auth, browserLocalPersistence).catch((error) => {
                 console.warn('Failed to set auth persistence:', error);
@@ -221,6 +223,7 @@ if (isPauseDay()) {
 
     // Setup match form submission
     setupMatchForm();
+    initSpotifyUI();
 }
 
 // Football animation logic
