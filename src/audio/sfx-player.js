@@ -3,7 +3,7 @@
 // from within a gesture handler (the "Start live mode" tap) before playback.
 
 let ctx = null;
-const buffers = new Map(); // src -> AudioBuffer
+const buffers = new Map(); // src -> Promise<AudioBuffer>
 
 /** Create/resume the AudioContext from within a user gesture. Idempotent. */
 export function unlock() {
@@ -15,13 +15,15 @@ export function unlock() {
   if (ctx.state === 'suspended') ctx.resume().catch(() => {});
 }
 
-async function load(src) {
-  if (buffers.has(src)) return buffers.get(src);
-  const res = await fetch(src);
-  const arr = await res.arrayBuffer();
-  const buf = await ctx.decodeAudioData(arr);
-  buffers.set(src, buf);
-  return buf;
+function load(src) {
+  if (!buffers.has(src)) {
+    const promise = fetch(src)
+      .then(r => r.arrayBuffer())
+      .then(arr => ctx.decodeAudioData(arr))
+      .catch(err => { buffers.delete(src); throw err; });
+    buffers.set(src, promise);
+  }
+  return buffers.get(src);
 }
 
 /** Preload sources so first playback has no fetch/decode latency. Best-effort. */
