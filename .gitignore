@@ -85,3 +85,6 @@ test-results/
 firebase_emulator_cache_backup/
 .playwright-mcp/
 *.png
+
+# Build output
+dist/
