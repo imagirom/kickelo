@@ -434,12 +434,22 @@ button:hover {
   min-width: 0;
 }
 
-.leaderboard-rank {
+/* .leaderboard-rank {
   color: #999;
   font-size: 13px;
   min-width: 18px;
   text-align: right;
   flex-shrink: 0;
+} */
+/* Hidden for now: leaderboard rank visual removed */
+.leaderboard-rank {
+  width: 0;
+  min-width: 0;
+  max-width: 0;
+  overflow: hidden;
+  visibility: hidden;
+  padding: 0;
+  margin: 0;
 }
 
 .leaderboard-name {
@@ -1589,6 +1599,7 @@ body.paused > *:not(#pauseOverlay) {
 .edit-modal-select {
   display: block;
   width: 100%;
+  max-width: none;
   padding: 8px 10px;
   margin-bottom: 6px;
   border-radius: 6px;
