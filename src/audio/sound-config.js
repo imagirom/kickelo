@@ -10,12 +10,12 @@
 // https://developer.spotify.com/dashboard, add redirect URIs for prod
 // (https://kickelo.web.app/) and dev (your http://localhost:5173 origin),
 // then paste the Client ID here.
-export const SPOTIFY_CLIENT_ID = 'REPLACE_WITH_YOUR_SPOTIFY_CLIENT_ID';
+export const SPOTIFY_CLIENT_ID = 'c107f2dbbd924cd7abe6935a88e30199';
 export const SPOTIFY_SCOPES = 'user-modify-playback-state user-read-playback-state';
 
 // "Danger Zone" — Kenny Loggins. Resolve the real track URI during
 // implementation (Spotify desktop: right-click track -> Share -> Copy Spotify URI).
-export const DANGER_ZONE_URI = 'spotify:track:REPLACE_WITH_DANGER_ZONE_TRACK_ID';
+export const DANGER_ZONE_URI = 'spotify:track:34x6hEJgGAOQvmlMql5Ige';
 
 // --- Event registry ---
 // To audition a different SFX clip, just change the `src` path below.
