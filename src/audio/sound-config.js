@@ -18,8 +18,10 @@ export const SPOTIFY_SCOPES = 'user-modify-playback-state user-read-playback-sta
 export const DANGER_ZONE_URI = 'spotify:track:REPLACE_WITH_DANGER_ZONE_TRACK_ID';
 
 // --- Event registry ---
-// To audition a different SFX clip, just change the `src` path to another file
-// in public/sounds/goals/.
+// To audition a different SFX clip, just change the `src` path below.
+// Bundled options in public/sounds/goals/ (all royalty-free, generated):
+//   red:  red-1.mp3 (beep) · red-chord.mp3 (chord) · red-arp.mp3 (two-note)
+//   blue: blue-1.mp3 (beep) · blue-chord.mp3 (chord) · blue-arp.mp3 (two-note)
 export const soundRegistry = {
   goalRed:    { channel: 'sfx', src: '/sounds/goals/red-1.mp3' },
   goalBlue:   { channel: 'sfx', src: '/sounds/goals/blue-1.mp3' },
