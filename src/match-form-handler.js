@@ -15,6 +15,10 @@ import {
     rankedMatchContainer, rankedMatchCheckbox
 } from './dom-elements.js';
 import { MAX_GOALS, STARTING_ELO } from './constants.js';
+import { emit } from './audio/sound-events.js';
+import { unlock, preload } from './audio/sfx-player.js';
+import { soundRegistry } from './audio/sound-config.js';
+import { isDangerZone } from './audio/danger-zone.js';
 import { evaluateLastSuggestion, clearLastSuggestion } from './pairing-service.js';
 import { showToast, showConfirm } from './toast.js';
 import { allMatches } from './match-data-service.js';
@@ -622,6 +626,8 @@ async function setLiveMode(enabled, skipPrompt = false) {
     teamBgoalsInput.disabled = enabled;
     if (enabled) {
         matchStartTime = Date.now();
+        unlock(); // resume AudioContext from this user gesture (mobile autoplay)
+        preload([soundRegistry.goalRed.src, soundRegistry.goalBlue.src]);
         goalLog = [];
         renderGoalTimeline();
         teamAgoalsInput.value = '0';
@@ -739,18 +745,26 @@ function updateScoredButtons() {
 btnRedScored.addEventListener('click', () => {
     if (!liveMode) return;
     const redGoals = goalLog.filter(g => g.team === 'red').length;
+    const blueGoals = goalLog.filter(g => g.team === 'blue').length;
     if (redGoals >= MAX_GOALS) return;
+    const danger = isDangerZone(redGoals, blueGoals, 'red');
     goalLog.push({ team: 'red', timestamp: Date.now() - matchStartTime });
     renderGoalTimeline();
     syncScoreSelectors(); // Ensure score display updates
+    emit('goalRed');
+    if (danger) emit('dangerZone');
 });
 btnBlueScored.addEventListener('click', () => {
     if (!liveMode) return;
+    const redGoals = goalLog.filter(g => g.team === 'red').length;
     const blueGoals = goalLog.filter(g => g.team === 'blue').length;
     if (blueGoals >= MAX_GOALS) return;
+    const danger = isDangerZone(redGoals, blueGoals, 'blue');
     goalLog.push({ team: 'blue', timestamp: Date.now() - matchStartTime });
     renderGoalTimeline();
     syncScoreSelectors(); // Ensure score display updates
+    emit('goalBlue');
+    if (danger) emit('dangerZone');
 });
 
 
