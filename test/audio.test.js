@@ -36,6 +36,12 @@ console.log('\n=== buildAuthUrl ===');
   assertEq(url.searchParams.get('code_challenge'), 'CHALLENGE123', 'challenge passed through');
   assertEq(url.searchParams.get('redirect_uri'), 'https://example.test/', 'redirect_uri passed through');
 }
+{
+  const url = new URL(buildAuthUrl('C', 'https://example.test/', 'STATE9'));
+  assertEq(url.searchParams.get('state'), 'STATE9', 'state included when provided');
+  const noState = new URL(buildAuthUrl('C', 'https://example.test/'));
+  assertEq(noState.searchParams.has('state'), false, 'state omitted when not provided');
+}
 
 console.log(`\n${'='.repeat(60)}`);
 console.log(`Audio Tests: ${passed} passed, ${failed} failed`);

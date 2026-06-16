@@ -15,6 +15,7 @@ const LS = {
   refresh: 'spotify_refresh_token',
   expires: 'spotify_expires_at',
   verifier: 'spotify_pkce_verifier',
+  state: 'spotify_oauth_state',
 };
 
 function redirectUri() {
@@ -38,8 +39,8 @@ async function challengeFromVerifier(verifier) {
   return base64url(digest);
 }
 
-/** Pure: assemble the Spotify authorize URL. */
-export function buildAuthUrl(challenge, redirect) {
+/** Pure: assemble the Spotify authorize URL. Includes `state` when provided. */
+export function buildAuthUrl(challenge, redirect, state) {
   const params = new URLSearchParams({
     client_id: SPOTIFY_CLIENT_ID,
     response_type: 'code',
@@ -48,16 +49,19 @@ export function buildAuthUrl(challenge, redirect) {
     code_challenge: challenge,
     scope: SPOTIFY_SCOPES,
   });
+  if (state) params.set('state', state);
   return `${AUTH_URL}?${params.toString()}`;
 }
 
 // --- auth flow ---
-/** Start login: store verifier, redirect to Spotify. */
+/** Start login: store verifier + state, redirect to Spotify. */
 export async function connect() {
   const verifier = randomString(64);
+  const state = randomString(16);
   localStorage.setItem(LS.verifier, verifier);
+  localStorage.setItem(LS.state, state);
   const challenge = await challengeFromVerifier(verifier);
-  window.location.href = buildAuthUrl(challenge, redirectUri());
+  window.location.href = buildAuthUrl(challenge, redirectUri(), state);
 }
 
 function storeTokens(data) {
@@ -66,14 +70,32 @@ function storeTokens(data) {
   localStorage.setItem(LS.expires, String(Date.now() + (data.expires_in - 60) * 1000));
 }
 
-/** Handle the ?code= redirect on page load. Returns true if a code was processed. */
+function clearAuthUrl() {
+  const url = new URL(window.location.href);
+  url.search = '';
+  window.history.replaceState({}, document.title, url.toString());
+}
+
+/**
+ * Handle the ?code= / ?error= redirect on page load.
+ * Returns true ONLY when tokens were successfully obtained.
+ */
 export async function handleRedirect() {
   const params = new URLSearchParams(window.location.search);
+  const error = params.get('error');
   const code = params.get('code');
-  if (!code) return false;
+  if (!error && !code) return false; // nothing to process; leave URL untouched
+
+  const returnedState = params.get('state');
+  const expectedState = localStorage.getItem(LS.state);
   const verifier = localStorage.getItem(LS.verifier);
+  let success = false;
   try {
-    if (verifier) {
+    if (error) {
+      console.warn('[spotify] auth error', error);
+    } else if (!verifier || !returnedState || returnedState !== expectedState) {
+      console.warn('[spotify] auth state mismatch or missing verifier');
+    } else {
       const res = await fetch(TOKEN_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -86,20 +108,29 @@ export async function handleRedirect() {
         }),
       });
       const data = await res.json();
-      if (data.access_token) storeTokens(data);
+      if (data.access_token) { storeTokens(data); success = true; }
     }
   } catch (err) {
     console.warn('[spotify] token exchange failed', err);
   } finally {
     localStorage.removeItem(LS.verifier);
-    const url = new URL(window.location.href);
-    url.search = '';
-    window.history.replaceState({}, document.title, url.toString());
+    localStorage.removeItem(LS.state);
+    clearAuthUrl();
   }
-  return true;
+  return success;
 }
 
-async function refresh() {
+// Single-flight refresh: concurrent callers share one in-flight refresh so the
+// rotating refresh token is only spent once.
+let refreshPromise = null;
+function refresh() {
+  if (!refreshPromise) {
+    refreshPromise = doRefresh().finally(() => { refreshPromise = null; });
+  }
+  return refreshPromise;
+}
+
+async function doRefresh() {
   const refreshToken = localStorage.getItem(LS.refresh);
   if (!refreshToken) return null;
   try {
