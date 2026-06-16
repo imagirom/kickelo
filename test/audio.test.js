@@ -1,5 +1,6 @@
 // Live-mode audio: pure logic tests (no browser, no network).
 import { isDangerZone } from '../src/audio/danger-zone.js';
+import { buildAuthUrl } from '../src/audio/spotify-client.js';
 
 let passed = 0;
 let failed = 0;
@@ -25,6 +26,16 @@ assertEq(isDangerZone(3, 4, 'red'),  false, '3:4, red scores  -> 4:4 (deuce, not
 assertEq(isDangerZone(3, 2, 'red'),  false, '3:2, red scores  -> 4:2 (no, opponent on 2)');
 assertEq(isDangerZone(4, 1, 'blue'), false, '4:1, blue scores -> 4:2 (no, scorer reaches 2)');
 assertEq(isDangerZone(0, 0, 'red'),  false, '0:0, red scores  -> 1:0 (no)');
+
+console.log('\n=== buildAuthUrl ===');
+{
+  const url = new URL(buildAuthUrl('CHALLENGE123', 'https://example.test/'));
+  assertEq(url.origin + url.pathname, 'https://accounts.spotify.com/authorize', 'auth endpoint');
+  assertEq(url.searchParams.get('response_type'), 'code', 'response_type=code');
+  assertEq(url.searchParams.get('code_challenge_method'), 'S256', 'S256 method');
+  assertEq(url.searchParams.get('code_challenge'), 'CHALLENGE123', 'challenge passed through');
+  assertEq(url.searchParams.get('redirect_uri'), 'https://example.test/', 'redirect_uri passed through');
+}
 
 console.log(`\n${'='.repeat(60)}`);
 console.log(`Audio Tests: ${passed} passed, ${failed} failed`);
