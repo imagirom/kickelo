@@ -15,6 +15,7 @@ import { initializeNotifications } from './notification-service.js';
 import { initializeActivityHeatmap } from './activity-heatmap.js';
 import { initializeTournamentUI } from './tournament/tournament-ui.js';
 import { handleRedirect, initSpotifyUI } from './audio/spotify-client.js';
+import { initDevMenu } from './dev-menu.js';
 
 import { auth } from './firebase-service.js';
 import { onAuthStateChanged, signInWithEmailAndPassword, setPersistence, browserLocalPersistence, signOut } from 'firebase/auth';
@@ -224,6 +225,7 @@ if (isPauseDay()) {
     // Setup match form submission
     setupMatchForm();
     initSpotifyUI();
+    initDevMenu();
 }
 
 // Football animation logic

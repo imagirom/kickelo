@@ -93,6 +93,7 @@ export async function handleRedirect() {
   try {
     if (error) {
       console.warn('[spotify] auth error', error);
+      showToast("Spotify couldn't authorize this account — you may not be on the app's allowlist. Ask the owner to add your Spotify email.", 'error');
     } else if (!verifier || !returnedState || returnedState !== expectedState) {
       console.warn('[spotify] auth state mismatch or missing verifier');
     } else {

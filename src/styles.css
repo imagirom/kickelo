@@ -2335,3 +2335,18 @@ body.paused > *:not(#pauseOverlay) {
 .tournament-hidden {
   display: none !important;
 }
+/* Hidden developer menu (revealed by triple-tapping the secret strip) */
+#devUnlockStrip {
+  width: 100%;
+  height: 28px;
+  margin-top: 40px;
+}
+#devMenu {
+  margin-top: 8px;
+}
+.dev-menu-note {
+  font-size: 0.85em;
+  color: #888;
+  margin: 8px 0 0;
+  line-height: 1.4;
+}
