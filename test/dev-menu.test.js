@@ -1,5 +1,5 @@
 // Dev-menu triple-tap logic tests (pure, no DOM).
-import { registerTap } from '../src/dev-menu.js';
+import { registerTap, isDevMode } from '../src/dev-menu.js';
 
 let passed = 0;
 let failed = 0;
@@ -33,6 +33,9 @@ assertEq(registerTap([0], 1500), { timestamps: [1500], reveal: false }, 'tap exa
 assertEq(registerTap([], 5000), { timestamps: [5000], reveal: false }, 'fresh tap after reveal');
 // Custom thresholds honored.
 assertEq(registerTap([10], 20, 1500, 2), { timestamps: [], reveal: true }, 'custom needed=2 reveals on 2nd tap');
+
+console.log('\n=== isDevMode ===');
+assertEq(isDevMode(), false, 'dev mode is off until revealed');
 
 console.log(`\n${'='.repeat(60)}`);
 console.log(`Dev Menu Tests: ${passed} passed, ${failed} failed`);

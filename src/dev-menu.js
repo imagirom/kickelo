@@ -18,6 +18,14 @@ export function registerTap(timestamps, now, windowMs = 1500, needed = 3) {
   return { timestamps: recent, reveal: false };
 }
 
+// Whether the hidden dev menu has been revealed this session (in-memory only).
+let devMode = false;
+
+/** True once the triple-tap has revealed the dev menu (reset on reload). */
+export function isDevMode() {
+  return devMode;
+}
+
 /** Wire the secret strip so a triple-tap reveals the dev menu. */
 export function initDevMenu() {
   const strip = document.getElementById('devUnlockStrip');
@@ -28,7 +36,11 @@ export function initDevMenu() {
   const tap = () => {
     const result = registerTap(taps, Date.now());
     taps = result.timestamps;
-    if (result.reveal) menu.style.display = 'block';
+    if (result.reveal) {
+      menu.style.display = 'block';
+      devMode = true;
+      window.dispatchEvent(new CustomEvent('dev-mode-changed', { detail: { devMode: true } }));
+    }
   };
   strip.addEventListener('click', tap);
 }
