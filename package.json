@@ -12,8 +12,9 @@
     "test:edit": "node test/match-edit-service.test.js",
     "test:tournament": "node test/tournament-engine.test.js",
     "test:audio": "node test/audio.test.js",
+    "test:teams": "node test/teams.test.js",
     "test:e2e": "npx playwright test",
-    "test": "npm run test:stats && npm run test:cache && npm run test:edit && npm run test:tournament && npm run test:audio && npm run test:devmenu",
+    "test": "npm run test:stats && npm run test:cache && npm run test:edit && npm run test:tournament && npm run test:audio && npm run test:teams && npm run test:devmenu",
     "test:devmenu": "node test/dev-menu.test.js"
   },
   "devDependencies": {
