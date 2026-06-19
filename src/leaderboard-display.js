@@ -4,6 +4,8 @@ import { leaderboardList } from './dom-elements.js';
 import { getCachedStats, getAllCachedStats, getAllTeamEloStats } from './stats-cache-service.js';
 import { getSeasons, getSelectedSeason, setSelectedSeason } from './season-service.js';
 import { STARTING_ELO, BADGE_THRESHOLDS } from './constants.js';
+import { getTeamRecord, setTeamName } from './teams/team-service.js';
+import { isDevMode } from './dev-menu.js';
 
 let onPlayerClickCallback = null;
 let showInactivePlayers = false;  // Default: hide inactive players
@@ -408,7 +410,9 @@ function renderTeamLeaderboard() {
 
         const nameSpan = document.createElement('span');
         nameSpan.classList.add('leaderboard-name');
-        nameSpan.textContent = team.players.join(' + ');
+        const record = getTeamRecord(team.key);
+        const playersLabel = team.players.join(' + ');
+        nameSpan.textContent = record?.name ? `${playersLabel} (${record.name})` : playersLabel;
 
         const valueSpan = document.createElement('span');
         valueSpan.classList.add('leaderboard-value');
@@ -425,6 +429,31 @@ function renderTeamLeaderboard() {
 
         li.appendChild(playerInfoSpan);
         li.appendChild(meta);
+
+        // Dev-only: edit the team name.
+        if (isDevMode()) {
+            const editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.className = 'team-name-edit-btn';
+            editBtn.textContent = '✏️';
+            editBtn.title = 'Edit team name';
+            editBtn.style.background = 'none';
+            editBtn.style.border = 'none';
+            editBtn.style.cursor = 'pointer';
+            editBtn.style.fontSize = '1em';
+            editBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const current = getTeamRecord(team.key)?.name || '';
+                const next = window.prompt(`Team name for ${playersLabel}:`, current);
+                if (next === null) return; // cancelled
+                try {
+                    await setTeamName(team.key, team.players, next);
+                } catch (err) {
+                    console.error('Failed to save team name:', err);
+                }
+            });
+            li.appendChild(editBtn);
+        }
 
         if (idx === 0) li.classList.add('gold');
         else if (idx === 1) li.classList.add('silver');
@@ -663,6 +692,8 @@ export function initializeLeaderboardDisplay() {
     window.addEventListener('matches-updated', updateLeaderboardDisplay);
     window.addEventListener('players-updated', updateLeaderboardDisplay);
     window.addEventListener('stats-cache-updated', updateLeaderboardDisplay);
+    window.addEventListener('teams-updated', updateLeaderboardDisplay);
+    window.addEventListener('dev-mode-changed', updateLeaderboardDisplay);
 
     // Perform an initial render in case data is already available from cache
     updateLeaderboardDisplay();
