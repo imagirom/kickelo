@@ -2350,3 +2350,18 @@ body.paused > *:not(#pauseOverlay) {
   margin: 8px 0 0;
   line-height: 1.4;
 }
+
+/* Live-mode team labels (above the Start-live-mode button) */
+#liveTeamLabels {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.live-team-label {
+  font-weight: 600;
+  font-size: 0.95em;
+  min-height: 1.2em;
+}
+.live-team-label.red { color: #ce848c; }
+.live-team-label.blue { color: #6cabc2; text-align: right; }
