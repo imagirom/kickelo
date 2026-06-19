@@ -140,5 +140,20 @@ service cloud.firestore {
       // Tournaments cannot be hard-deleted.
       allow delete: if false;
     }
+
+    // --- Rules for the 'teams' collection (team names + entrance songs) ---
+    match /teams/{teamId} {
+
+      // READ: anyone using the app can read team names/songs.
+      allow read: if canAccess();
+
+      // WRITE: any signed-in non-anonymous user can create/update a team record.
+      // Validates field types; name/songUri may be null (cleared).
+      allow write: if canAccess()
+            && request.resource.data.players is list
+            && (!('name' in request.resource.data) || request.resource.data.name == null || request.resource.data.name is string)
+            && (!('songUri' in request.resource.data) || request.resource.data.songUri == null || request.resource.data.songUri is string)
+            && (!('songPositionMs' in request.resource.data) || request.resource.data.songPositionMs is number);
+    }
   }
 }
