@@ -19,6 +19,9 @@ import { emit } from './audio/sound-events.js';
 import { unlock, preload } from './audio/sfx-player.js';
 import { soundRegistry } from './audio/sound-config.js';
 import { isDangerZone, isFourFour } from './audio/danger-zone.js';
+import { armDevice, playTrack } from './audio/spotify-client.js';
+import { getCurrentTeamRecords } from './teams/team-service.js';
+import { pickEntrance } from './teams/team-identity.js';
 import { evaluateLastSuggestion, clearLastSuggestion } from './pairing-service.js';
 import { showToast, showConfirm } from './toast.js';
 import { allMatches } from './match-data-service.js';
@@ -628,6 +631,10 @@ async function setLiveMode(enabled, skipPrompt = false) {
         matchStartTime = Date.now();
         unlock(); // resume AudioContext from this user gesture (mobile autoplay)
         preload([soundRegistry.goalRed.src, soundRegistry.goalBlue.src]);
+        armDevice(); // pre-arm Spotify device so the first track lands reliably
+        const { red, blue } = getCurrentTeamRecords();
+        const entrance = pickEntrance([red, blue]);
+        if (entrance) playTrack(entrance.songUri, { positionMs: entrance.songPositionMs || 0 });
         goalLog = [];
         renderGoalTimeline();
         teamAgoalsInput.value = '0';

@@ -16,6 +16,9 @@ import { initializeActivityHeatmap } from './activity-heatmap.js';
 import { initializeTournamentUI } from './tournament/tournament-ui.js';
 import { handleRedirect, initSpotifyUI } from './audio/spotify-client.js';
 import { initDevMenu } from './dev-menu.js';
+import { initializeTeams, resetTeamsListener, seedInitialTeams } from './teams/team-service.js';
+import { initLiveTeamLabels } from './teams/team-display.js';
+import { showToast } from './toast.js';
 
 import { auth } from './firebase-service.js';
 import { onAuthStateChanged, signInWithEmailAndPassword, setPersistence, browserLocalPersistence, signOut } from 'firebase/auth';
@@ -74,6 +77,7 @@ function goOnline() {
     // Start the data services and store their unsubscribe functions
     activeListeners.push(initializeMatchesData());
     activeListeners.push(initializePlayersData());
+    activeListeners.push(initializeTeams());
 
     // Initialize the UI components that depend on that data
     initializeLeaderboardDisplay();
@@ -102,6 +106,7 @@ function goOffline() {
     // Reset data listeners so they can be re-initialized
     resetMatchDataListener();
     resetPlayerDataListener();
+    resetTeamsListener();
 }
 
 function showPasswordGate(message = '') {
@@ -226,6 +231,29 @@ if (isPauseDay()) {
     setupMatchForm();
     initSpotifyUI();
     initDevMenu();
+
+    initLiveTeamLabels();
+
+    const seedTeamsBtn = document.getElementById('seedTeamsBtn');
+    if (seedTeamsBtn) {
+        seedTeamsBtn.addEventListener('click', async () => {
+            seedTeamsBtn.disabled = true;
+            try {
+                const { written, skipped } = await seedInitialTeams();
+                let msg = `Seeded ${written} team record(s).`;
+                if (skipped.length) {
+                    msg += ` Skipped ${skipped.length} unresolved (see console).`;
+                    console.warn('[teams] seed skipped:', skipped);
+                }
+                showToast(msg, skipped.length ? 'warning' : 'success');
+            } catch (err) {
+                console.error('[teams] seed failed:', err);
+                showToast('Seeding failed — see console.', 'error');
+            } finally {
+                seedTeamsBtn.disabled = false;
+            }
+        });
+    }
 }
 
 // Football animation logic
