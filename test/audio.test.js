@@ -1,6 +1,6 @@
 // Live-mode audio: pure logic tests (no browser, no network).
 import { isDangerZone, isFourFour } from '../src/audio/danger-zone.js';
-import { buildAuthUrl } from '../src/audio/spotify-client.js';
+import { buildAuthUrl, playUrl, pickDeviceId } from '../src/audio/spotify-client.js';
 
 let passed = 0;
 let failed = 0;
@@ -51,6 +51,18 @@ console.log('\n=== buildAuthUrl ===');
   const noState = new URL(buildAuthUrl('C', 'https://example.test/'));
   assertEq(noState.searchParams.has('state'), false, 'state omitted when not provided');
 }
+
+console.log('\n=== playUrl ===');
+assertEq(playUrl(null), 'https://api.spotify.com/v1/me/player/play', 'no device id -> bare play URL');
+assertEq(playUrl('abc'), 'https://api.spotify.com/v1/me/player/play?device_id=abc', 'device id appended');
+assertEq(playUrl('a b'), 'https://api.spotify.com/v1/me/player/play?device_id=a%20b', 'device id url-encoded');
+
+console.log('\n=== pickDeviceId ===');
+assertEq(pickDeviceId([]), null, 'empty list -> null');
+assertEq(pickDeviceId(null), null, 'null -> null');
+assertEq(pickDeviceId([{ id: 'x', is_active: false }]), 'x', 'single device -> its id');
+assertEq(pickDeviceId([{ id: 'x', is_active: false }, { id: 'y', is_active: true }]), 'y', 'active device preferred');
+assertEq(pickDeviceId([{ id: 'x', is_active: false }, { id: 'y', is_active: false }]), 'x', 'no active -> first device');
 
 console.log(`\n${'='.repeat(60)}`);
 console.log(`Audio Tests: ${passed} passed, ${failed} failed`);

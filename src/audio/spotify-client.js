@@ -9,6 +9,8 @@ import { showToast } from '../toast.js';
 const AUTH_URL = 'https://accounts.spotify.com/authorize';
 const TOKEN_URL = 'https://accounts.spotify.com/api/token';
 const PLAY_URL = 'https://api.spotify.com/v1/me/player/play';
+const DEVICES_URL = 'https://api.spotify.com/v1/me/player/devices';
+const TRANSFER_URL = 'https://api.spotify.com/v1/me/player';
 
 const LS = {
   access: 'spotify_access_token',
@@ -16,6 +18,7 @@ const LS = {
   expires: 'spotify_expires_at',
   verifier: 'spotify_pkce_verifier',
   state: 'spotify_oauth_state',
+  device: 'spotify_device_id',
 };
 
 function redirectUri() {
@@ -163,16 +166,86 @@ async function getAccessToken() {
   return refresh();
 }
 
-/** Play a track on the active device. Best-effort; never throws. */
+/** Pure: the play endpoint, targeting a specific device when one is known. */
+export function playUrl(deviceId) {
+  return deviceId
+    ? `${PLAY_URL}?device_id=${encodeURIComponent(deviceId)}`
+    : PLAY_URL;
+}
+
+/** Pure: choose the best device from a Spotify devices list (active first, else first). */
+export function pickDeviceId(devices) {
+  if (!Array.isArray(devices) || devices.length === 0) return null;
+  const active = devices.find((d) => d && d.is_active);
+  return (active || devices[0]).id || null;
+}
+
+async function fetchDevices(token) {
+  try {
+    const res = await fetch(DEVICES_URL, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.devices) ? data.devices : [];
+  } catch (err) {
+    console.warn('[spotify] fetchDevices failed', err);
+    return [];
+  }
+}
+
+/** Refresh the stored device id from the API (pre-arm). Best-effort, quiet, never throws. */
+export async function armDevice() {
+  try {
+    const token = await getAccessToken();
+    if (!token) return null;
+    const id = pickDeviceId(await fetchDevices(token));
+    if (id) localStorage.setItem(LS.device, id);
+    return id;
+  } catch (err) {
+    console.warn('[spotify] armDevice failed', err);
+    return null;
+  }
+}
+
+async function transferTo(token, deviceId) {
+  try {
+    await fetch(TRANSFER_URL, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_ids: [deviceId], play: false }),
+    });
+  } catch (err) {
+    console.warn('[spotify] transfer failed', err);
+  }
+}
+
+async function sendPlay(token, uri, positionMs, deviceId) {
+  return fetch(playUrl(deviceId), {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uris: [uri], position_ms: positionMs }),
+  });
+}
+
+/** Play a track on the user's device. Targets the stored device id, and on a
+ *  404 (device gone idle) re-arms + transfers + retries once. Never throws. */
 export async function playTrack(uri, { positionMs = 0 } = {}) {
   try {
     const token = await getAccessToken();
     if (!token) { showToast('Connect Spotify to enable music.', 'info'); return; }
-    const res = await fetch(PLAY_URL, {
-      method: 'PUT',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uris: [uri], position_ms: positionMs }),
-    });
+
+    let deviceId = localStorage.getItem(LS.device) || null;
+    let res = await sendPlay(token, uri, positionMs, deviceId);
+
+    // 404 = no active/targeted device. Re-arm from the devices list, wake it, retry once.
+    if (res.status === 404) {
+      const recovered = pickDeviceId(await fetchDevices(token));
+      if (recovered) {
+        localStorage.setItem(LS.device, recovered);
+        await transferTo(token, recovered);
+        res = await sendPlay(token, uri, positionMs, recovered);
+      }
+    }
+
     if (res.status === 404) showToast('Open Spotify and hit play once to enable music.', 'warning');
     else if (res.status === 403) showToast('Spotify Premium required for playback.', 'error');
     else if (res.status === 401) showToast('Spotify session expired — reconnect.', 'error');
@@ -188,4 +261,5 @@ export function initSpotifyUI() {
   const render = () => { btn.textContent = isConnected() ? 'Spotify ✓' : 'Connect Spotify'; };
   btn.addEventListener('click', () => { if (!isConnected()) connect(); });
   render();
+  if (isConnected()) armDevice(); // refresh the stored device id on load
 }
