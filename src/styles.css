@@ -2353,27 +2353,29 @@ body.paused > *:not(#pauseOverlay) {
 
 /* Live-mode team labels (above the Start-live-mode button) */
 #liveTeamLabels {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
+  justify-content: center;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 12px;
+  margin: 4px 0 12px;
   min-height: 1.5em;
 }
 .live-team-label {
+  flex: 0 1 auto;
+  max-width: 42%;
   font-weight: 600;
   font-size: 1.2em;
   line-height: 1.25;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
-.live-team-label.red { color: #ce848c; text-align: left; }
-.live-team-label.blue { color: #6cabc2; text-align: right; }
+.live-team-label.red { color: #ce848c; text-align: right; }
+.live-team-label.blue { color: #6cabc2; text-align: left; }
 .live-team-vs {
-  width: 2.2em;
+  flex: 0 0 auto;
+  width: 2em;
   text-align: center;
-  flex-shrink: 0;
-  font-size: 0.95em;
+  font-size: 0.9em;
   font-style: italic;
   color: var(--text-color-secondary, #888);
 }

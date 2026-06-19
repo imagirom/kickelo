@@ -433,11 +433,14 @@ function renderTeamLeaderboard() {
 
         // Dev-only: edit the team name + entrance song.
         if (isDevMode()) {
+            // Keep the games count right-aligned, with the button after it.
+            meta.style.marginLeft = 'auto';
             const editBtn = document.createElement('button');
             editBtn.type = 'button';
             editBtn.className = 'match-edit-btn';
             editBtn.textContent = '✏️';
             editBtn.title = 'Edit team';
+            editBtn.style.marginLeft = '8px';
             editBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 openTeamEditModal(team.key, team.players);
