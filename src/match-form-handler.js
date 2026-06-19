@@ -18,7 +18,7 @@ import { MAX_GOALS, STARTING_ELO } from './constants.js';
 import { emit } from './audio/sound-events.js';
 import { unlock, preload } from './audio/sfx-player.js';
 import { soundRegistry } from './audio/sound-config.js';
-import { isDangerZone } from './audio/danger-zone.js';
+import { isDangerZone, isFourFour } from './audio/danger-zone.js';
 import { evaluateLastSuggestion, clearLastSuggestion } from './pairing-service.js';
 import { showToast, showConfirm } from './toast.js';
 import { allMatches } from './match-data-service.js';
@@ -748,11 +748,13 @@ btnRedScored.addEventListener('click', () => {
     const blueGoals = goalLog.filter(g => g.team === 'blue').length;
     if (redGoals >= MAX_GOALS) return;
     const danger = isDangerZone(redGoals, blueGoals, 'red');
+    const fourFour = isFourFour(redGoals, blueGoals, 'red');
     goalLog.push({ team: 'red', timestamp: Date.now() - matchStartTime });
     renderGoalTimeline();
     syncScoreSelectors(); // Ensure score display updates
     emit('goalRed');
     if (danger) emit('dangerZone');
+    if (fourFour) emit('fourFour');
 });
 btnBlueScored.addEventListener('click', () => {
     if (!liveMode) return;
@@ -760,11 +762,13 @@ btnBlueScored.addEventListener('click', () => {
     const blueGoals = goalLog.filter(g => g.team === 'blue').length;
     if (blueGoals >= MAX_GOALS) return;
     const danger = isDangerZone(redGoals, blueGoals, 'blue');
+    const fourFour = isFourFour(redGoals, blueGoals, 'blue');
     goalLog.push({ team: 'blue', timestamp: Date.now() - matchStartTime });
     renderGoalTimeline();
     syncScoreSelectors(); // Ensure score display updates
     emit('goalBlue');
     if (danger) emit('dangerZone');
+    if (fourFour) emit('fourFour');
 });
 
 

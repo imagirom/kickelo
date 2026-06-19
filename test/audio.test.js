@@ -1,5 +1,5 @@
 // Live-mode audio: pure logic tests (no browser, no network).
-import { isDangerZone } from '../src/audio/danger-zone.js';
+import { isDangerZone, isFourFour } from '../src/audio/danger-zone.js';
 import { buildAuthUrl } from '../src/audio/spotify-client.js';
 
 let passed = 0;
@@ -26,6 +26,15 @@ assertEq(isDangerZone(3, 4, 'red'),  false, '3:4, red scores  -> 4:4 (deuce, not
 assertEq(isDangerZone(3, 2, 'red'),  false, '3:2, red scores  -> 4:2 (no, opponent on 2)');
 assertEq(isDangerZone(4, 1, 'blue'), false, '4:1, blue scores -> 4:2 (no, scorer reaches 2)');
 assertEq(isDangerZone(0, 0, 'red'),  false, '0:0, red scores  -> 1:0 (no)');
+
+console.log('\n=== isFourFour (X:Y -> 4:4 transition) ===');
+assertEq(isFourFour(4, 3, 'blue'), true,  '4:3, blue scores -> 4:4');
+assertEq(isFourFour(3, 4, 'red'),  true,  '3:4, red scores  -> 4:4');
+assertEq(isFourFour(3, 3, 'red'),  false, '3:3, red scores  -> 4:3 (not 4:4)');
+assertEq(isFourFour(3, 3, 'blue'), false, '3:3, blue scores -> 3:4 (not 4:4)');
+assertEq(isFourFour(4, 2, 'blue'), false, '4:2, blue scores -> 4:3 (danger, not 4:4)');
+assertEq(isFourFour(2, 4, 'red'),  false, '2:4, red scores  -> 3:4 (danger, not 4:4)');
+assertEq(isFourFour(0, 0, 'red'),  false, '0:0, red scores  -> 1:0 (not 4:4)');
 
 console.log('\n=== buildAuthUrl ===');
 {

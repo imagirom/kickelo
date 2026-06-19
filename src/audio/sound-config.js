@@ -17,6 +17,9 @@ export const SPOTIFY_SCOPES = 'user-modify-playback-state user-read-playback-sta
 // implementation (Spotify desktop: right-click track -> Share -> Copy Spotify URI).
 export const DANGER_ZONE_URI = 'spotify:track:34x6hEJgGAOQvmlMql5Ige';
 
+// "Golden" — played when a match reaches 4:4 (deuce).
+export const GOLDEN_URI = 'spotify:track:5Cp75TUMrHF6c8xbhdligS';
+
 // --- Event registry ---
 // To audition a different SFX clip, just change the `src` path below.
 // Bundled options in public/sounds/goals/ (all royalty-free, generated):
@@ -26,4 +29,5 @@ export const soundRegistry = {
   goalRed:    { channel: 'sfx', src: '/sounds/goals/red-1.mp3' },
   goalBlue:   { channel: 'sfx', src: '/sounds/goals/blue-1.mp3' },
   dangerZone: { channel: 'spotify', uri: DANGER_ZONE_URI, positionMs: 0 },
+  fourFour:   { channel: 'spotify', uri: GOLDEN_URI, positionMs: 0 },
 };

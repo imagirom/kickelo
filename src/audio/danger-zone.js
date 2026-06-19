@@ -17,3 +17,16 @@ export function isDangerZone(redBefore, blueBefore, scorer) {
   const scorerAfter = scorerBefore + 1;
   return scorerAfter === MAX_GOALS - 2 && opponentScore === MAX_GOALS - 1;
 }
+
+/**
+ * @param {number} redBefore   red score before this goal
+ * @param {number} blueBefore  blue score before this goal
+ * @param {'red'|'blue'} scorer team that just scored
+ * @returns {boolean} true only when the goal makes the score 4:4 (deuce)
+ */
+export function isFourFour(redBefore, blueBefore, scorer) {
+  const scorerBefore = scorer === 'red' ? redBefore : blueBefore;
+  const opponentScore = scorer === 'red' ? blueBefore : redBefore;
+  const scorerAfter = scorerBefore + 1;
+  return scorerAfter === MAX_GOALS - 1 && opponentScore === MAX_GOALS - 1;
+}
