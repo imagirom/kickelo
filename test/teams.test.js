@@ -1,5 +1,5 @@
 // Team subsystem: pure-logic tests (no browser, no Firestore).
-import { teamKey, pairFromSelects, pickEntrance } from '../src/teams/team-identity.js';
+import { teamKey, pairFromSelects, pickEntrance, normalizeTrackUri } from '../src/teams/team-identity.js';
 import { INITIAL_TEAMS, resolveTeamPlayers } from '../src/teams/initial-teams.js';
 
 let passed = 0;
@@ -60,6 +60,14 @@ console.log('\n=== resolveTeamPlayers ===');
   assertEq(ambiguous.ok, false, 'prefix matching two roster names -> ambiguous, not ok');
   assertEq(ambiguous.ambiguous.length, 1, 'reports the ambiguous entry');
 }
+
+console.log('\n=== normalizeTrackUri ===');
+assertEq(normalizeTrackUri('spotify:track:5Cp75TUMrHF6c8xbhdligS'), 'spotify:track:5Cp75TUMrHF6c8xbhdligS', 'passes through a valid URI');
+assertEq(normalizeTrackUri('https://open.spotify.com/track/5Cp75TUMrHF6c8xbhdligS?si=abc'), 'spotify:track:5Cp75TUMrHF6c8xbhdligS', 'extracts id from share URL');
+assertEq(normalizeTrackUri('  spotify:track:ABC123  '), 'spotify:track:ABC123', 'trims surrounding whitespace');
+assertEq(normalizeTrackUri(''), null, 'empty -> null');
+assertEq(normalizeTrackUri('not a track'), null, 'garbage -> null');
+assertEq(normalizeTrackUri('spotify:album:5Cp75TUMrHF6c8xbhdligS'), null, 'non-track URI -> null');
 
 console.log('\n=== INITIAL_TEAMS shape ===');
 assertEq(Array.isArray(INITIAL_TEAMS), true, 'INITIAL_TEAMS is an array');

@@ -980,6 +980,9 @@ function handleRoleSelectionChange(team) {
         positionsConfirmedCheckbox.checked = false;
     }
     updatePositionConfirmationUI();
+    // Signal lineup changes (incl. programmatic ones from suggest-pairing /
+    // tournament prefill / swaps) so the live-team labels refresh.
+    window.dispatchEvent(new CustomEvent('lineup-changed'));
 }
 
 function getFilledRoleValue(select) {

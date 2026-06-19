@@ -37,3 +37,19 @@ export function pickEntrance(records, rng = Math.random) {
   if (withSong.length === 0) return null;
   return withSong[Math.floor(rng() * withSong.length)];
 }
+
+/**
+ * Normalize a Spotify track reference to a `spotify:track:<id>` URI.
+ * Accepts a bare URI or an open.spotify.com/track/<id> share URL.
+ * @param {string} input
+ * @returns {string|null} the canonical URI, or null if it isn't a track ref
+ */
+export function normalizeTrackUri(input) {
+  const s = (input || '').trim();
+  if (!s) return null;
+  let m = s.match(/^spotify:track:([A-Za-z0-9]+)$/);
+  if (m) return `spotify:track:${m[1]}`;
+  m = s.match(/open\.spotify\.com\/track\/([A-Za-z0-9]+)/);
+  if (m) return `spotify:track:${m[1]}`;
+  return null;
+}

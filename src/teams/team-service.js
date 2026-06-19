@@ -33,12 +33,18 @@ export function getCurrentTeamRecords() {
   };
 }
 
-/** Persist a team name (merge; does not touch songUri). Pass empty string to clear. */
-export async function setTeamName(key, players, name) {
-  const clean = (name || '').trim();
+/**
+ * Persist a team's editable fields (merge). Empty name/songUri clear to null.
+ * @param {string} key      team key
+ * @param {string[]} players sorted pair
+ * @param {{ name?: string, songUri?: string|null, songPositionMs?: number }} fields
+ */
+export async function setTeamRecord(key, players, { name = '', songUri = null, songPositionMs = 0 } = {}) {
   await setDoc(doc(teamsCol(), key), {
     players: [...players].sort(),
-    name: clean || null,
+    name: (name || '').trim() || null,
+    songUri: (songUri || '').trim() || null,
+    songPositionMs: Number.isFinite(songPositionMs) ? Math.max(0, Math.round(songPositionMs)) : 0,
     updatedAt: serverTimestamp(),
   }, { merge: true });
 }

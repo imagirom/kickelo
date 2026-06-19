@@ -2353,15 +2353,55 @@ body.paused > *:not(#pauseOverlay) {
 
 /* Live-mode team labels (above the Start-live-mode button) */
 #liveTeamLabels {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  min-height: 1.5em;
 }
 .live-team-label {
   font-weight: 600;
-  font-size: 0.95em;
-  min-height: 1.2em;
+  font-size: 1.2em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
-.live-team-label.red { color: #ce848c; }
+.live-team-label.red { color: #ce848c; text-align: left; }
 .live-team-label.blue { color: #6cabc2; text-align: right; }
+.live-team-vs {
+  width: 2.2em;
+  text-align: center;
+  flex-shrink: 0;
+  font-size: 0.95em;
+  font-style: italic;
+  color: var(--text-color-secondary, #888);
+}
+
+/* Team edit modal fields */
+.team-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+  text-align: left;
+}
+.team-edit-field > label {
+  font-weight: 600;
+  font-size: 0.9em;
+}
+.team-edit-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #444);
+  background: var(--card-background-color, #2a2a2a);
+  color: var(--text-color-primary, #eee);
+  font-size: 1em;
+}
+.team-edit-hint {
+  font-size: 0.8em;
+  color: var(--text-color-secondary, #888);
+  line-height: 1.3;
+}

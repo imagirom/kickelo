@@ -4,7 +4,8 @@ import { leaderboardList } from './dom-elements.js';
 import { getCachedStats, getAllCachedStats, getAllTeamEloStats } from './stats-cache-service.js';
 import { getSeasons, getSelectedSeason, setSelectedSeason } from './season-service.js';
 import { STARTING_ELO, BADGE_THRESHOLDS } from './constants.js';
-import { getTeamRecord, setTeamName } from './teams/team-service.js';
+import { getTeamRecord } from './teams/team-service.js';
+import { openTeamEditModal } from './teams/team-edit-modal.js';
 import { isDevMode } from './dev-menu.js';
 
 let onPlayerClickCallback = null;
@@ -430,27 +431,16 @@ function renderTeamLeaderboard() {
         li.appendChild(playerInfoSpan);
         li.appendChild(meta);
 
-        // Dev-only: edit the team name.
+        // Dev-only: edit the team name + entrance song.
         if (isDevMode()) {
             const editBtn = document.createElement('button');
             editBtn.type = 'button';
-            editBtn.className = 'team-name-edit-btn';
+            editBtn.className = 'match-edit-btn';
             editBtn.textContent = '✏️';
-            editBtn.title = 'Edit team name';
-            editBtn.style.background = 'none';
-            editBtn.style.border = 'none';
-            editBtn.style.cursor = 'pointer';
-            editBtn.style.fontSize = '1em';
-            editBtn.addEventListener('click', async (e) => {
+            editBtn.title = 'Edit team';
+            editBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const current = getTeamRecord(team.key)?.name || '';
-                const next = window.prompt(`Team name for ${playersLabel}:`, current);
-                if (next === null) return; // cancelled
-                try {
-                    await setTeamName(team.key, team.players, next);
-                } catch (err) {
-                    console.error('Failed to save team name:', err);
-                }
+                openTeamEditModal(team.key, team.players);
             });
             li.appendChild(editBtn);
         }

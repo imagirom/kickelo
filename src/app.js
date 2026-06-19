@@ -242,8 +242,9 @@ if (isPauseDay()) {
                 const { written, skipped } = await seedInitialTeams();
                 let msg = `Seeded ${written} team record(s).`;
                 if (skipped.length) {
-                    msg += ` Skipped ${skipped.length} unresolved (see console).`;
-                    console.warn('[teams] seed skipped:', skipped);
+                    const names = skipped.map(s => s.entry.firstNames.join(' & ')).join('; ');
+                    msg += ` Couldn't match: ${names}.`;
+                    console.warn('[teams] seed skipped (name resolution):', skipped);
                 }
                 showToast(msg, skipped.length ? 'warning' : 'success');
             } catch (err) {

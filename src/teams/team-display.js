@@ -15,19 +15,27 @@ function labelFor(players) {
 export function updateLiveTeamLabels() {
   const redEl = document.getElementById('liveTeamLabelRed');
   const blueEl = document.getElementById('liveTeamLabelBlue');
+  const vsEl = document.getElementById('liveTeamVs');
   if (!redEl || !blueEl) return;
   const { red, blue } = pairFromSelects(
     teamA1Select?.value, teamA2Select?.value, teamB1Select?.value, teamB2Select?.value
   );
-  redEl.textContent = labelFor(red);
-  blueEl.textContent = labelFor(blue);
+  const redText = labelFor(red);
+  const blueText = labelFor(blue);
+  redEl.textContent = redText;
+  blueEl.textContent = blueText;
+  // Only show "vs" once both sides have a team.
+  if (vsEl) vsEl.style.visibility = redText && blueText ? 'visible' : 'hidden';
 }
 
-/** Wire the labels: react to select changes and to team-data updates. */
+/** Wire the labels: react to lineup changes (manual or programmatic) and team-data updates. */
 export function initLiveTeamLabels() {
   [teamA1Select, teamA2Select, teamB1Select, teamB2Select].forEach((sel) => {
     if (sel) sel.addEventListener('change', updateLiveTeamLabels);
   });
+  // Suggest-pairing / tournament prefill / swaps set selects programmatically
+  // (no native 'change' event), so also listen for the lineup-changed signal.
+  window.addEventListener('lineup-changed', updateLiveTeamLabels);
   window.addEventListener('teams-updated', updateLiveTeamLabels);
   updateLiveTeamLabels();
 }
