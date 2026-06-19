@@ -148,7 +148,7 @@ function setupForegroundNotifications() {
             const title = payload.notification?.title || 'New match submitted';
             const body = payload.notification?.body || 'Join the session now.';
             if (Notification.permission === 'granted') {
-                new Notification(title, { body, icon: '/assets/football.svg' });
+                new Notification(title, { body, icon: '/assets/wm26ball.svg' });
             }
         });
     });
