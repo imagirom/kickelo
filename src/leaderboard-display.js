@@ -7,6 +7,9 @@ import { STARTING_ELO, BADGE_THRESHOLDS } from './constants.js';
 import { getTeamRecord } from './teams/team-service.js';
 import { openTeamEditModal } from './teams/team-edit-modal.js';
 import { isDevMode } from './dev-menu.js';
+import { BETTING } from './betting/betting-config.js';
+import { getBalances } from './betting/bets-service.js';
+import { footballs } from './betting/currency.js';
 
 let onPlayerClickCallback = null;
 let showInactivePlayers = false;  // Default: hide inactive players
@@ -456,6 +459,39 @@ function renderTeamLeaderboard() {
     });
 }
 
+function renderGoldenFootballLeaderboard() {
+    const rows = [...getBalances().entries()]
+        .map(([name, w]) => ({ name, ...w }))
+        .sort((a, b) => b.balance - a.balance);
+    if (rows.length === 0) {
+        leaderboardList.innerHTML = '<li>No bets yet.</li>';
+        return;
+    }
+    rows.forEach((row, idx) => {
+        const li = document.createElement('li');
+        li.classList.add('leaderboard-item');
+        li.style.cursor = 'default';
+        const info = document.createElement('span');
+        info.classList.add('leaderboard-player-info');
+        const rank = document.createElement('span');
+        rank.classList.add('leaderboard-rank');
+        rank.textContent = `${idx + 1}`;
+        const name = document.createElement('span');
+        name.classList.add('leaderboard-name');
+        name.textContent = row.name;
+        const value = document.createElement('span');
+        value.classList.add('leaderboard-value');
+        value.appendChild(footballs(row.balance));
+        info.append(rank, name, value);
+        const meta = document.createElement('span');
+        meta.style.fontSize = '0.9em';
+        meta.style.color = 'var(--text-color-secondary, #666)';
+        meta.textContent = row.todayDelta ? `${row.todayDelta > 0 ? '+' : ''}${Math.round(row.todayDelta)} today` : '';
+        li.append(info, meta);
+        leaderboardList.appendChild(li);
+    });
+}
+
 // The main function to render the leaderboard from the local 'allPlayers' array
 async function updateLeaderboardDisplay() {
     leaderboardList.innerHTML = "";
@@ -463,6 +499,11 @@ async function updateLeaderboardDisplay() {
 
     if (sortBy === 'teamElo') {
         renderTeamLeaderboard();
+        return;
+    }
+
+    if (sortBy === 'goldenFootballs') {
+        renderGoldenFootballLeaderboard();
         return;
     }
 
@@ -622,6 +663,12 @@ async function updateLeaderboardDisplay() {
 export function initializeLeaderboardDisplay() {
     // Set up the sort by dropdown
     const sortBySelect = document.getElementById('sortBySelect');
+    if (BETTING.enabled && sortBySelect && !sortBySelect.querySelector('option[value="goldenFootballs"]')) {
+        const opt = document.createElement('option');
+        opt.value = 'goldenFootballs';
+        opt.textContent = 'Golden footballs';
+        sortBySelect.appendChild(opt);
+    }
     if (sortBySelect) {
         sortBySelect.value = sortBy;
         sortBySelect.addEventListener('change', (e) => {
@@ -687,6 +734,7 @@ export function initializeLeaderboardDisplay() {
     window.addEventListener('stats-cache-updated', updateLeaderboardDisplay);
     window.addEventListener('teams-updated', updateLeaderboardDisplay);
     window.addEventListener('dev-mode-changed', updateLeaderboardDisplay);
+    window.addEventListener('bets-updated', () => { if (sortBy === 'goldenFootballs') updateLeaderboardDisplay(); });
 
     // Perform an initial render in case data is already available from cache
     updateLeaderboardDisplay();
