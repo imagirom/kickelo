@@ -608,6 +608,20 @@ let liveMode = false;
 let goalLog = [];
 let matchStartTime = 0;
 let liveTimerInterval = null; // Timer interval for live match
+let wakeLock = null; // Keeps the screen on during live mode
+
+async function requestWakeLock() {
+    try {
+        wakeLock = await navigator.wakeLock?.request('screen');
+    } catch (e) {
+        console.warn('Wake lock unavailable:', e);
+    }
+}
+
+// The browser releases the lock whenever the page is hidden; re-acquire on return.
+document.addEventListener('visibilitychange', () => {
+    if (liveMode && document.visibilityState === 'visible') requestWakeLock();
+});
 
 async function setLiveMode(enabled, skipPrompt = false) {
     if (enabled === liveMode) return;
@@ -640,6 +654,7 @@ async function setLiveMode(enabled, skipPrompt = false) {
         teamAgoalsInput.value = '0';
         teamBgoalsInput.value = '0';
         startLiveMatchTimer();
+        requestWakeLock();
         // Fix: Always show timer when live mode starts
         const timerElem = document.getElementById('liveMatchTimer');
         if (timerElem) timerElem.style.display = 'inline-block';
@@ -648,6 +663,8 @@ async function setLiveMode(enabled, skipPrompt = false) {
         goalLog = [];
         renderGoalTimeline();
         stopLiveMatchTimer();
+        wakeLock?.release();
+        wakeLock = null;
         // Fix: Hide timer when not in live mode
         const timerElem = document.getElementById('liveMatchTimer');
         if (timerElem) timerElem.style.display = 'none';
