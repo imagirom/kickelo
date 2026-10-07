@@ -41,7 +41,8 @@ export function getOpenBetsFor(key) {
     && resolveHouseBet(b, allMatches || [], now).status === 'open');
 }
 
-function available(bettor) {
+/** Spendable now: wallet balance, plus today's allowance if no bet placed today. */
+export function available(bettor) {
   const w = getBalances().get(bettor);
   const hasBetToday = allBets.some((b) => !b.void && b.bettor === bettor && dayKey(b.placedAt) === dayKey(Date.now()));
   return (w?.balance ?? 0) + (hasBetToday ? 0 : BETTING.dailyAllowance);

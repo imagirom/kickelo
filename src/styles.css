@@ -2418,3 +2418,29 @@ body.paused > *:not(#pauseOverlay) {
 }
 @keyframes gf-shine { to { -webkit-mask-position: left; mask-position: left; } }
 @media (prefers-reduced-motion: reduce) { .gf-icon.gf-shine { animation: none; } }
+
+/* Bets box */
+#betsBox { display: flex; flex-direction: column; gap: 10px; }
+#betsContent { display: flex; flex-direction: column; gap: 10px; }
+.bets-header { display: flex; justify-content: center; align-items: center; gap: 12px; }
+.bets-header-icon { height: 2em; width: 2em; flex: 0 0 auto; }
+.bets-live { display: flex; flex-direction: column; gap: 6px; }
+.bets-live-top { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.bets-live-dot { color: var(--accent-red); font-weight: 600; font-size: 0.9em; }
+.bets-live-score { font-size: 1.2em; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bets-odds button { flex: 1; font-size: 1em; padding: 8px 12px; border-radius: 5px; }
+.bets-odds button.red_select { background: var(--dark-red); border: 2px solid var(--accent-red); text-align: center; }
+.bets-odds button.blue_select { background: var(--dark-blue); border: 2px solid var(--accent-blue); text-align: center; }
+.bets-odds button:disabled { opacity: 0.5; cursor: default; }
+.bets-caption, .bets-hint { font-size: 0.85em; color: var(--text-color-secondary); text-align: center; margin: 4px 0 0; }
+.bets-feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 0.9em; }
+.bets-feed li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4em; }
+.bets-feed-bettor { font-weight: 600; }
+.bets-feed-result { margin-left: auto; color: var(--text-color-secondary); }
+.bets-feed-result.won { color: #f2c230; }
+.bet-sheet { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+.bet-sheet-title { font-weight: 600; }
+.bet-sheet-chips { display: flex; gap: 8px; align-items: center; }
+.bet-chip { flex: 0 0 auto; width: auto; padding: 6px 12px; }
+.bet-sheet-stake { flex: 1; min-width: 0; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--input-border-color); background: var(--gray-dark); color: var(--text-color-primary); }
+.bet-sheet-info { font-size: 0.9em; color: var(--text-color-secondary); font-variant-numeric: tabular-nums; }
