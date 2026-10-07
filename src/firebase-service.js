@@ -18,6 +18,8 @@ import {
     limit,
     connectFirestoreEmulator,
     onSnapshot,
+    runTransaction,
+    serverTimestamp,
 } from 'firebase/firestore';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getStorage, ref as storageRef, connectStorageEmulator } from 'firebase/storage';
@@ -72,6 +74,8 @@ export {
     orderBy,
     limit,
     onSnapshot,
+    runTransaction,
+    serverTimestamp,
     auth,
     storage,
     storageRef

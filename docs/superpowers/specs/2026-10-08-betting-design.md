@@ -271,12 +271,12 @@ stats, so all phones show identical odds and props. A placed bet copies its odds
 from the offer.
 
 **Overwrite protection.** Before a device publishes a change to
-`meta/currentMatch` that changes the pairs (player selection, Suggest) or
-cancels live mode, while the current match is live or has ≥ 1 non-void bet,
+`meta/currentMatch` that changes the pairs (player selection, Suggest, tournament prefill), while the current match is live or has ≥ 1 non-void bet,
 it asks via `showConfirm`:
 "Replace the current match *Marc + Manuel vs Roman + Tobi*? 3 bets (45 ⚽︎) will be refunded."
 Declining keeps the local form change but does not publish it; the device
 shows a small "not shared" hint. Position swaps and Red/Blue swaps never ask.
+Cancelling live mode never refunds bets: they carry over to the next match with the same lineup (usually the restart) and are refunded at day end otherwise, so cancel needs no extra confirmation.
 
 **Leaderboard.** One new `#sortBySelect` option, "Golden footballs", rendered
 via a special-case branch (like `teamElo`): rank, name, balance, today's ±.
