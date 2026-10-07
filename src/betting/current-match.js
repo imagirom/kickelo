@@ -29,6 +29,11 @@ export function needsOverwriteConfirm(current, newKey, openBets) {
   return Boolean(current.liveStartedAt) || openBets > 0;
 }
 
+/** A logged match on the shared matchup ends it: clear the offer (live or final-score mode alike). */
+export function shouldClearAfterSubmit(current, teamA, teamB) {
+  return Boolean(current?.offer) && current.matchupKey === matchupKey(teamA, teamB);
+}
+
 /** Fields for a goal-log change. 'SERVER' is replaced by serverTimestamp() in the service. */
 export function goalUpdate(current, goalLog) {
   const update = { goalLog };

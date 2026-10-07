@@ -4,7 +4,7 @@ import { BETTING, houseBetsActive } from '../src/betting/betting-config.js';
 import { matchupKey, isFullLineup, sameTeam } from '../src/betting/matchup.js';
 import { goalProbability, scorelineDistribution, winProbability, toOdds, logLikelihood } from '../src/betting/model.js';
 import { dayKey, firstGoalAt, resolveHouseBet, computeBalances, checkBet } from '../src/betting/ledger.js';
-import { buildOffer, shouldPublishLineup, needsOverwriteConfirm, goalUpdate, isLiveTakeover, ownsLive } from '../src/betting/current-match.js';
+import { shouldClearAfterSubmit, buildOffer, shouldPublishLineup, needsOverwriteConfirm, goalUpdate, isLiveTakeover, ownsLive } from '../src/betting/current-match.js';
 import params from '../src/betting/model-params.json' with { type: 'json' };
 
 let passed = 0;
@@ -176,6 +176,16 @@ console.log('\n=== current match helpers ===');
   assertEq(goalUpdate({ firstGoalAt: null }, [{ team: 'red', timestamp: 1 }]), { goalLog: [{ team: 'red', timestamp: 1 }], firstGoalAt: 'SERVER' }, 'first goal stamps firstGoalAt');
   assertEq(goalUpdate({ firstGoalAt: 123 }, [{ team: 'red', timestamp: 1 }, { team: 'blue', timestamp: 2 }]), { goalLog: [{ team: 'red', timestamp: 1 }, { team: 'blue', timestamp: 2 }] }, 'later goals do not restamp');
   assertEq(goalUpdate({ firstGoalAt: 123 }, []), { goalLog: [] }, 'removing all goals never reopens betting');
+}
+
+console.log('\n=== submit clears offer ===');
+{
+  const cur = { matchupKey: 'A::B|C::D', offer: { winner: {} } };
+  assertEq(shouldClearAfterSubmit(cur, ['A', 'B'], ['C', 'D']), true, 'logged match on the shared matchup clears its offer');
+  assertEq(shouldClearAfterSubmit(cur, ['D', 'C'], ['B', 'A']), true, 'side/position order does not matter');
+  assertEq(shouldClearAfterSubmit(cur, ['A', 'C'], ['B', 'D']), false, 'other matchup logged -> shared match untouched');
+  assertEq(shouldClearAfterSubmit({ ...cur, offer: null }, ['A', 'B'], ['C', 'D']), false, 'already cleared -> no write');
+  assertEq(shouldClearAfterSubmit(null, ['A', 'B'], ['C', 'D']), false, 'no shared match -> no write');
 }
 
 // --- further sections are appended by later tasks above this line ---

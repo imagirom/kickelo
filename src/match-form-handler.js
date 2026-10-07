@@ -381,6 +381,7 @@ export function setupMatchForm() {
             // 2. Add match to Firestore first
             const matchDocRef = await addDoc(matchesColRef, matchData);
             clearLastSuggestion();
+            window.dispatchEvent(new CustomEvent('match-submitted', { detail: { teamA, teamB } }));
 
             // 3. If vibration tracking enabled, upload log to Storage and update match doc
             if (vibrationTrackingEnabled && vibrationLog.length > 0) {

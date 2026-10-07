@@ -7,7 +7,7 @@ import { getTeamRecord } from '../teams/team-service.js';
 import { showConfirm, showToast } from '../toast.js';
 import { BETTING } from './betting-config.js';
 import { matchupKey } from './matchup.js';
-import { shouldPublishLineup, needsOverwriteConfirm, isLiveTakeover, ownsLive } from './current-match.js';
+import { shouldClearAfterSubmit, shouldPublishLineup, needsOverwriteConfirm, isLiveTakeover, ownsLive } from './current-match.js';
 import { getCurrentMatch, publishLineup, publishPositions, publishLiveStart, publishGoal, publishLiveEnd } from './current-match-service.js';
 import { getOpenBetsFor } from './bets-service.js';
 
@@ -59,7 +59,7 @@ async function syncLineup(retry = true) {
   if (needsOverwriteConfirm(current, matchupKey(red, blue), open.length)) {
     const stake = open.reduce((sum, b) => sum + b.stake, 0);
     const lines = [`Replace the current match ${label(current.red)} vs ${label(current.blue)}?`];
-    if (open.length) lines.push(`${open.length} bet${open.length === 1 ? '' : 's'} (${stake} golden footballs) will be refunded.`);
+    if (open.length) lines.push(`${open.length} bet${open.length === 1 ? '' : 's'} (${stake} golden footballs) will be refunded unless this lineup plays again today.`);
     if (current.liveStartedAt) lines.push('It is currently live.');
     const ok = await showConfirm(lines.join('\n'), { confirmLabel: 'Replace', cancelLabel: 'Keep shared match', type: 'warning' });
     if (!ok) { setNotShared(true); return false; }
@@ -103,6 +103,12 @@ export function initSyncController() {
   // never after a declined overwrite, a skipped lineup, or another phone taking over.
   window.addEventListener('live-goal', (e) => {
     if (ownsLive(getCurrentMatch(), liveId)) publishGoal(e.detail).catch(warn);
+  });
+
+  // Final-score submits never fire live-ended; close the house on the logged matchup here.
+  window.addEventListener('match-submitted', (e) => {
+    const { teamA, teamB } = e.detail || {};
+    if (shouldClearAfterSubmit(getCurrentMatch(), teamA || [], teamB || [])) publishLiveEnd().catch(warn);
   });
 
   window.addEventListener('live-ended', () => {

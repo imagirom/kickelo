@@ -176,7 +176,8 @@ service cloud.firestore {
             && request.resource.data.placedAt == request.time
             && request.resource.data.void == false
             && request.resource.data.matchupKey == currentMatch().matchupKey
-            && currentMatch().firstGoalAt == null;
+            && currentMatch().firstGoalAt == null
+            && currentMatch().offer != null;
 
       // Phase 1: only voiding (undo).
       allow update: if canAccess()
