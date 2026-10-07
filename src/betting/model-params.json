@@ -1,1 +1,9 @@
-{ "s": 1200, "c": 0.02, "kappa": 1000000, "fittedAt": null, "n": 0, "note": "placeholder until admin/model/fit.mjs runs" }
+{
+  "s": 1115.2587928837534,
+  "c": 0.01159230347992362,
+  "kappa": 43.28757372302368,
+  "fittedAt": "2026-10-07T22:59:46.862Z",
+  "n": 1680,
+  "trainN": 1456,
+  "testN": 224
+}

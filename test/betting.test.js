@@ -3,6 +3,7 @@
 import { BETTING, houseBetsActive } from '../src/betting/betting-config.js';
 import { matchupKey, isFullLineup, sameTeam } from '../src/betting/matchup.js';
 import { goalProbability, scorelineDistribution, winProbability, toOdds, logLikelihood } from '../src/betting/model.js';
+import params from '../src/betting/model-params.json' with { type: 'json' };
 
 let passed = 0;
 let failed = 0;
@@ -71,6 +72,13 @@ console.log('\n=== race-to-5 model ===');
   const ll = logLikelihood([{ gap: 0, goalsFor: 5, goalsAgainst: 0 }], P);
   assertClose(ll, Math.log(1 / 32), 1e-9, 'log-likelihood of a single 5:0 at p=0.5');
 }
+
+console.log('\n=== shipped model params ===');
+assertEq(Number.isFinite(params.s) && params.s > 0, true, 'fitted s is positive');
+assertEq(params.kappa > 0, true, 'fitted kappa is positive');
+assertEq(Math.abs(winProbability(0, params) - 0.5) < 0.05, true, 'gap 0 is near even (season start behaviour)');
+assertEq(winProbability(300, params) > 0.7, true, 'a 300-point favourite is a clear favourite');
+assertEq(params.n > 0 && params.trainN + params.testN === params.n, true, 'params come from a real fit');
 
 // --- further sections are appended by later tasks above this line ---
 
