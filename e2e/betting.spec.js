@@ -66,6 +66,21 @@ test('lineup, live score and house bets sync across phones', async ({ browser })
   await b.selectOption('#sortBySelect', 'goldenFootballs');
   await expect(b.locator('#leaderboard')).toContainText(/\d/);
 
+  // B starting live mode on the same, already-live matchup asks first (spec Concurrency #7);
+  // declining keeps A's live match: B's goals never reach the shared doc, betting stays closed.
+  const shared = async () => (await (await fetch(`${DOCS}/meta/currentMatch`, { headers: OWNER })).json()).fields;
+  await b.click('body');
+  await pickLineup(b, names);
+  await b.click('#toggleLiveMode');
+  await expect(b.locator('.confirm-dialog')).toContainText('already live');
+  await b.locator('.confirm-btn-cancel').click();
+  await b.click('#btnBlueScored');
+  await b.click('#btnBlueScored');
+  await b.waitForTimeout(1000);
+  const doc = await shared();
+  expect(doc.goalLog.arrayValue.values).toHaveLength(1);
+  expect(doc.firstGoalAt.timestampValue).toBeTruthy();
+
   await ctxA.close();
   await ctxB.close();
 });

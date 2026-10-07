@@ -4,7 +4,7 @@ import { BETTING, houseBetsActive } from '../src/betting/betting-config.js';
 import { matchupKey, isFullLineup, sameTeam } from '../src/betting/matchup.js';
 import { goalProbability, scorelineDistribution, winProbability, toOdds, logLikelihood } from '../src/betting/model.js';
 import { dayKey, firstGoalAt, resolveHouseBet, computeBalances, checkBet } from '../src/betting/ledger.js';
-import { buildOffer, shouldPublishLineup, needsOverwriteConfirm, goalUpdate } from '../src/betting/current-match.js';
+import { buildOffer, shouldPublishLineup, needsOverwriteConfirm, goalUpdate, isLiveTakeover, ownsLive } from '../src/betting/current-match.js';
 import params from '../src/betting/model-params.json' with { type: 'json' };
 
 let passed = 0;
@@ -162,6 +162,16 @@ console.log('\n=== current match helpers ===');
   assertEq(needsOverwriteConfirm({ ...cur, liveStartedAt: 1 }, 'A::C|B::D', 0), true, 'live -> confirm');
   assertEq(needsOverwriteConfirm(cur, cur.matchupKey, 5), false, 'same matchup -> never confirm');
   assertEq(needsOverwriteConfirm(null, 'A::C|B::D', 5), false, 'no current -> no confirm');
+
+  assertEq(isLiveTakeover({ ...cur, liveStartedAt: 1 }, cur.matchupKey), true, 'same matchup already live -> takeover confirm');
+  assertEq(isLiveTakeover({ ...cur, liveId: 'x' }, cur.matchupKey), true, 'live id without committed timestamp -> takeover');
+  assertEq(isLiveTakeover(cur, cur.matchupKey), false, 'same matchup idle -> no takeover');
+  assertEq(isLiveTakeover({ ...cur, liveStartedAt: 1 }, 'A::C|B::D'), false, 'other matchup -> handled by overwrite confirm');
+  assertEq(isLiveTakeover(null, cur.matchupKey), false, 'no current -> no takeover');
+  assertEq(ownsLive({ liveId: 'x' }, 'x'), true, 'own live id -> may write goals');
+  assertEq(ownsLive({ liveId: 'y' }, 'x'), false, 'taken over -> stop writing goals');
+  assertEq(ownsLive({ liveId: null }, null), false, 'never started here -> no writes');
+  assertEq(ownsLive(null, 'x'), false, 'doc gone -> no writes');
 
   assertEq(goalUpdate({ firstGoalAt: null }, [{ team: 'red', timestamp: 1 }]), { goalLog: [{ team: 'red', timestamp: 1 }], firstGoalAt: 'SERVER' }, 'first goal stamps firstGoalAt');
   assertEq(goalUpdate({ firstGoalAt: 123 }, [{ team: 'red', timestamp: 1 }, { team: 'blue', timestamp: 2 }]), { goalLog: [{ team: 'red', timestamp: 1 }, { team: 'blue', timestamp: 2 }] }, 'later goals do not restamp');

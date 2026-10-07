@@ -35,3 +35,13 @@ export function goalUpdate(current, goalLog) {
   if (goalLog.length > 0 && !current?.firstGoalAt) update.firstGoalAt = 'SERVER';
   return update;
 }
+
+/** Starting live mode on a matchup that is already live elsewhere is a takeover (spec Concurrency #7). */
+export function isLiveTakeover(current, newKey) {
+  return Boolean(current?.liveStartedAt || current?.liveId) && current.matchupKey === newKey;
+}
+
+/** Only the device whose liveId is in the shared doc writes goals / ends the live match. */
+export function ownsLive(current, liveId) {
+  return Boolean(liveId) && current?.liveId === liveId;
+}

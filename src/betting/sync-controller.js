@@ -7,16 +7,16 @@ import { getTeamRecord } from '../teams/team-service.js';
 import { showConfirm, showToast } from '../toast.js';
 import { BETTING } from './betting-config.js';
 import { matchupKey } from './matchup.js';
-import { shouldPublishLineup, needsOverwriteConfirm } from './current-match.js';
+import { shouldPublishLineup, needsOverwriteConfirm, isLiveTakeover, ownsLive } from './current-match.js';
 import { getCurrentMatch, publishLineup, publishPositions, publishLiveStart, publishGoal, publishLiveEnd } from './current-match-service.js';
 import { getOpenBetsFor } from './bets-service.js';
 
 let initialized = false;
-let isLiveHere = false;
+let liveId = null; // set while this device runs live mode and the shared doc carries it
 let lastWarnAt = 0;
 
 export function isLiveOnThisDevice() {
-  return isLiveHere;
+  return ownsLive(getCurrentMatch(), liveId);
 }
 
 function warn(err) {
@@ -84,19 +84,30 @@ export function initSyncController() {
   });
 
   window.addEventListener('live-started', async () => {
-    isLiveHere = true;
+    liveId = null;
     try {
-      if (await syncLineup()) await publishLiveStart();
-    } catch (err) { warn(err); }
+      const { red, blue } = readLineup();
+      const takeover = isLiveTakeover(getCurrentMatch(), matchupKey(red, blue));
+      if (takeover) {
+        const ok = await showConfirm('This match is already live on another phone.\nTake over live scoring here?',
+          { confirmLabel: 'Take over', cancelLabel: 'Keep other phone', type: 'warning' });
+        if (!ok) { setNotShared(true); return; }
+      }
+      if (!(await syncLineup())) return;
+      liveId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      await publishLiveStart(liveId, { keepFirstGoal: takeover });
+    } catch (err) { liveId = null; warn(err); }
   });
 
+  // Goals and end go to the shared doc only while it still carries this device's liveId:
+  // never after a declined overwrite, a skipped lineup, or another phone taking over.
   window.addEventListener('live-goal', (e) => {
-    if (isLiveHere) publishGoal(e.detail).catch(warn);
+    if (ownsLive(getCurrentMatch(), liveId)) publishGoal(e.detail).catch(warn);
   });
 
   window.addEventListener('live-ended', () => {
-    if (!isLiveHere) return;
-    isLiveHere = false;
-    publishLiveEnd().catch(warn);
+    const owned = ownsLive(getCurrentMatch(), liveId);
+    liveId = null;
+    if (owned) publishLiveEnd().catch(warn);
   });
 }

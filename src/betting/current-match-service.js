@@ -42,7 +42,7 @@ export async function publishLineup({ red, blue, positions }, { expectedUpdatedA
     tx.set(ref(), {
       red: [...red].sort(), blue: [...blue].sort(), positions,
       matchupKey: matchupKey(red, blue),
-      liveStartedAt: null, goalLog: [], firstGoalAt: null,
+      liveStartedAt: null, liveId: null, goalLog: [], firstGoalAt: null,
       offer: buildOffer(red, blue, eloOf, params, BETTING),
       updatedAt: serverTimestamp(),
     });
@@ -53,8 +53,11 @@ export async function publishPositions({ red, blue, positions }) {
   await updateDoc(ref(), { red: [...red].sort(), blue: [...blue].sort(), positions, updatedAt: serverTimestamp() });
 }
 
-export async function publishLiveStart() {
-  await setDoc(ref(), { liveStartedAt: serverTimestamp(), goalLog: [], firstGoalAt: null, updatedAt: serverTimestamp() }, { merge: true });
+/** keepFirstGoal: a takeover of a running match must not reopen house betting. */
+export async function publishLiveStart(liveId, { keepFirstGoal = false } = {}) {
+  const update = { liveStartedAt: serverTimestamp(), liveId, goalLog: [], updatedAt: serverTimestamp() };
+  if (!keepFirstGoal) update.firstGoalAt = null;
+  await setDoc(ref(), update, { merge: true });
 }
 
 export async function publishGoal(goalLog) {
@@ -65,5 +68,5 @@ export async function publishGoal(goalLog) {
 
 /** After submit or cancel: live fields cleared; offer cleared so the next lineup publish reprices. */
 export async function publishLiveEnd() {
-  await setDoc(ref(), { liveStartedAt: null, goalLog: [], firstGoalAt: null, offer: null, updatedAt: serverTimestamp() }, { merge: true });
+  await setDoc(ref(), { liveStartedAt: null, liveId: null, goalLog: [], firstGoalAt: null, offer: null, updatedAt: serverTimestamp() }, { merge: true });
 }
