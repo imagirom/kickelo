@@ -4,6 +4,7 @@ import { BETTING, houseBetsActive } from '../src/betting/betting-config.js';
 import { matchupKey, isFullLineup, sameTeam } from '../src/betting/matchup.js';
 import { goalProbability, scorelineDistribution, winProbability, toOdds, logLikelihood } from '../src/betting/model.js';
 import { dayKey, firstGoalAt, resolveHouseBet, computeBalances, checkBet } from '../src/betting/ledger.js';
+import { buildOffer, shouldPublishLineup, needsOverwriteConfirm, goalUpdate } from '../src/betting/current-match.js';
 import params from '../src/betting/model-params.json' with { type: 'json' };
 
 let passed = 0;
@@ -135,6 +136,36 @@ console.log('\n=== ledger ===');
   assertEq(dayKey(day + 3600 * 1000), dayKey(day), 'dayKey groups by local day');
 
   assertEq(checkBet(bet(day), {}), { ok: true }, 'checkBet allows everything for now');
+}
+
+console.log('\n=== current match helpers ===');
+{
+  const P = { s: 1200, c: 0, kappa: Infinity };
+  const elo = { A: 1600, B: 1600, C: 1400, D: 1400 };
+  const offer = buildOffer(['A', 'B'], ['C', 'D'], (n) => elo[n], P, { margin: 0.05, oddsClamp: [1.05, 10] });
+  assertEq(offer.gap, 200, 'gap = red avg - blue avg');
+  assertEq(offer.winner['A::B'] < offer.winner['C::D'], true, 'favourite gets lower odds');
+  const flipped = buildOffer(['C', 'D'], ['A', 'B'], (n) => elo[n], P, { margin: 0.05, oddsClamp: [1.05, 10] });
+  assertEq([flipped.winner['A::B'], flipped.winner['C::D']], [offer.winner['A::B'], offer.winner['C::D']], 'side swap -> identical odds per team');
+
+  const cur = { matchupKey: 'A::B|C::D', red: ['A', 'B'], blue: ['C', 'D'], positions: { redDefense: 'A', redOffense: 'B', blueDefense: 'C', blueOffense: 'D' }, offer };
+  assertEq(shouldPublishLineup(cur, ['A', 'B'], ['C', ''], {}), 'skip', 'incomplete lineup -> skip');
+  assertEq(shouldPublishLineup(cur, ['B', 'A'], ['C', 'D'], { redDefense: 'B', redOffense: 'A', blueDefense: 'C', blueOffense: 'D' }), 'positions', 'position swap -> positions only');
+  assertEq(shouldPublishLineup(cur, ['C', 'D'], ['A', 'B'], { redDefense: 'C', redOffense: 'D', blueDefense: 'A', blueOffense: 'B' }), 'positions', 'side swap -> positions only');
+  assertEq(shouldPublishLineup(cur, ['A', 'B'], ['C', 'D'], cur.positions), 'skip', 'identical -> skip');
+  assertEq(shouldPublishLineup({ ...cur, offer: null }, ['A', 'B'], ['C', 'D'], cur.positions), 'replace', 'same pairs after submit (offer null) -> replace, house reopens');
+  assertEq(shouldPublishLineup(cur, ['A', 'C'], ['B', 'D'], {}), 'replace', 'new pairs -> replace');
+  assertEq(shouldPublishLineup(null, ['A', 'B'], ['C', 'D'], {}), 'replace', 'no current doc -> replace');
+
+  assertEq(needsOverwriteConfirm(cur, 'A::C|B::D', 0), false, 'idle match without bets -> no confirm');
+  assertEq(needsOverwriteConfirm(cur, 'A::C|B::D', 2), true, 'open bets -> confirm');
+  assertEq(needsOverwriteConfirm({ ...cur, liveStartedAt: 1 }, 'A::C|B::D', 0), true, 'live -> confirm');
+  assertEq(needsOverwriteConfirm(cur, cur.matchupKey, 5), false, 'same matchup -> never confirm');
+  assertEq(needsOverwriteConfirm(null, 'A::C|B::D', 5), false, 'no current -> no confirm');
+
+  assertEq(goalUpdate({ firstGoalAt: null }, [{ team: 'red', timestamp: 1 }]), { goalLog: [{ team: 'red', timestamp: 1 }], firstGoalAt: 'SERVER' }, 'first goal stamps firstGoalAt');
+  assertEq(goalUpdate({ firstGoalAt: 123 }, [{ team: 'red', timestamp: 1 }, { team: 'blue', timestamp: 2 }]), { goalLog: [{ team: 'red', timestamp: 1 }, { team: 'blue', timestamp: 2 }] }, 'later goals do not restamp');
+  assertEq(goalUpdate({ firstGoalAt: 123 }, []), { goalLog: [] }, 'removing all goals never reopens betting');
 }
 
 // --- further sections are appended by later tasks above this line ---

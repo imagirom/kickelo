@@ -630,6 +630,7 @@ async function setLiveMode(enabled, skipPrompt = false) {
         goalLog = [];
     }
     liveMode = enabled;
+    window.dispatchEvent(new CustomEvent(enabled ? 'live-started' : 'live-ended'));
     liveMatchPanel.style.display = enabled ? 'flex' : 'none';
     toggleLiveMode.style.display = enabled ? 'none' : '';
     const cancelBtn = document.getElementById('cancelLiveMode');
@@ -742,6 +743,7 @@ function renderGoalTimeline() {
         btn.onclick = async () => {
             if (await showConfirm('Remove this goal from the log?', { confirmLabel: 'Remove', cancelLabel: 'Keep', type: 'warning' })) {
                 goalLog.splice(idx, 1);
+                window.dispatchEvent(new CustomEvent('live-goal', { detail: goalLog.slice() }));
                 renderGoalTimeline();
                 syncScoreSelectors();
                 updateScoredButtons();
@@ -774,6 +776,7 @@ btnRedScored.addEventListener('click', () => {
     const danger = isDangerZone(redGoals, blueGoals, 'red');
     const fourFour = isFourFour(redGoals, blueGoals, 'red');
     goalLog.push({ team: 'red', timestamp: Date.now() - matchStartTime });
+    window.dispatchEvent(new CustomEvent('live-goal', { detail: goalLog.slice() }));
     renderGoalTimeline();
     syncScoreSelectors(); // Ensure score display updates
     emit('goalRed');
@@ -788,6 +791,7 @@ btnBlueScored.addEventListener('click', () => {
     const danger = isDangerZone(redGoals, blueGoals, 'blue');
     const fourFour = isFourFour(redGoals, blueGoals, 'blue');
     goalLog.push({ team: 'blue', timestamp: Date.now() - matchStartTime });
+    window.dispatchEvent(new CustomEvent('live-goal', { detail: goalLog.slice() }));
     renderGoalTimeline();
     syncScoreSelectors(); // Ensure score display updates
     emit('goalBlue');
