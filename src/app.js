@@ -19,6 +19,10 @@ import { initDevMenu } from './dev-menu.js';
 import { initializeTeams, resetTeamsListener, seedInitialTeams } from './teams/team-service.js';
 import { initLiveTeamLabels } from './teams/team-display.js';
 import { showToast } from './toast.js';
+import { initializeCurrentMatch, resetCurrentMatchListener } from './betting/current-match-service.js';
+import { initializeBets, resetBetsListener } from './betting/bets-service.js';
+import { initBettingUI } from './betting/bets-ui.js';
+import { initSyncController } from './betting/sync-controller.js';
 
 import { auth } from './firebase-service.js';
 import { onAuthStateChanged, signInWithEmailAndPassword, setPersistence, browserLocalPersistence, signOut } from 'firebase/auth';
@@ -78,6 +82,8 @@ function goOnline() {
     activeListeners.push(initializeMatchesData());
     activeListeners.push(initializePlayersData());
     activeListeners.push(initializeTeams());
+    activeListeners.push(initializeCurrentMatch());
+    activeListeners.push(initializeBets());
 
     // Initialize the UI components that depend on that data
     initializeLeaderboardDisplay();
@@ -86,6 +92,8 @@ function goOnline() {
     initializePlayerManager();
     initializeNotifications();
     initializeTournamentUI();
+    initBettingUI();
+    initSyncController();
 }
 
 /**
@@ -107,6 +115,8 @@ function goOffline() {
     resetMatchDataListener();
     resetPlayerDataListener();
     resetTeamsListener();
+    resetCurrentMatchListener();
+    resetBetsListener();
 }
 
 function showPasswordGate(message = '') {

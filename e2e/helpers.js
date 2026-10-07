@@ -33,6 +33,8 @@ export async function ensureTestUser() {
 export async function signInViaUI(page) {
   await page.goto('/');
   const gate = page.locator('#passwordGate');
+  // The gate only shows once auth state resolves; isVisible() alone races it.
+  await gate.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
   if (await gate.isVisible()) {
     await page.locator('#passwordInput').fill(TEST_PASSWORD);
     await page.locator('#passwordSubmit').click();
