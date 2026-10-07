@@ -2407,3 +2407,14 @@ body.paused > *:not(#pauseOverlay) {
   color: var(--text-color-secondary, #888);
   line-height: 1.3;
 }
+
+/* Golden footballs */
+.gf-amount { display: inline-flex; align-items: center; gap: 0.15em; font-variant-numeric: tabular-nums; }
+.gf-icon { height: 1em; width: 1em; vertical-align: -0.125em; }
+.gf-icon.gf-shine {
+  -webkit-mask: linear-gradient(110deg, #000 40%, rgba(0,0,0,.55) 50%, #000 60%) right/300% 100%;
+  mask: linear-gradient(110deg, #000 40%, rgba(0,0,0,.55) 50%, #000 60%) right/300% 100%;
+  animation: gf-shine 3.5s ease-in-out infinite;
+}
+@keyframes gf-shine { to { -webkit-mask-position: left; mask-position: left; } }
+@media (prefers-reduced-motion: reduce) { .gf-icon.gf-shine { animation: none; } }
