@@ -173,6 +173,12 @@ export function playUrl(deviceId) {
     : PLAY_URL;
 }
 
+/** Pure: spotify:track:ID -> https://open.spotify.com/track/ID (opens the app on mobile). */
+export function openUrl(uri) {
+  const [, type, id] = uri.split(':');
+  return `https://open.spotify.com/${type}/${id}`;
+}
+
 /** Pure: choose the best device from a Spotify devices list (active first, else first). */
 export function pickDeviceId(devices) {
   if (!Array.isArray(devices) || devices.length === 0) return null;
@@ -231,7 +237,12 @@ async function sendPlay(token, uri, positionMs, deviceId) {
 export async function playTrack(uri, { positionMs = 0 } = {}) {
   try {
     const token = await getAccessToken();
-    if (!token) { showToast('Connect Spotify to enable music.', 'info'); return; }
+    if (!token) {
+      // Not connected: offer the track itself. window.open runs inside the click, so no popup blocker.
+      showToast('🎵 Spotify not connected — tap to open the song.', 'info', 8000,
+        () => window.open(openUrl(uri), '_blank', 'noopener'));
+      return;
+    }
 
     let deviceId = localStorage.getItem(LS.device) || null;
     let res = await sendPlay(token, uri, positionMs, deviceId);

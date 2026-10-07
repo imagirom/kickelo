@@ -1,6 +1,6 @@
 // Live-mode audio: pure logic tests (no browser, no network).
 import { isDangerZone, isFourFour } from '../src/audio/danger-zone.js';
-import { buildAuthUrl, playUrl, pickDeviceId } from '../src/audio/spotify-client.js';
+import { buildAuthUrl, playUrl, pickDeviceId, openUrl } from '../src/audio/spotify-client.js';
 
 let passed = 0;
 let failed = 0;
@@ -56,6 +56,9 @@ console.log('\n=== playUrl ===');
 assertEq(playUrl(null), 'https://api.spotify.com/v1/me/player/play', 'no device id -> bare play URL');
 assertEq(playUrl('abc'), 'https://api.spotify.com/v1/me/player/play?device_id=abc', 'device id appended');
 assertEq(playUrl('a b'), 'https://api.spotify.com/v1/me/player/play?device_id=a%20b', 'device id url-encoded');
+
+console.log('\n=== openUrl ===');
+assertEq(openUrl('spotify:track:5Cp75TUMrHF6c8xbhdligS'), 'https://open.spotify.com/track/5Cp75TUMrHF6c8xbhdligS', 'track uri -> open.spotify.com link');
 
 console.log('\n=== pickDeviceId ===');
 assertEq(pickDeviceId([]), null, 'empty list -> null');

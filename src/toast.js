@@ -16,8 +16,9 @@ function ensureContainer() {
  * @param {string} message - The text to display.
  * @param {'info'|'success'|'error'|'warning'} [type='info'] - Visual style.
  * @param {number} [durationMs=3000] - How long the toast stays visible.
+ * @param {Function} [onClick] - Extra action run when the toast is clicked (before dismiss).
  */
-export function showToast(message, type = 'info', durationMs = 3000) {
+export function showToast(message, type = 'info', durationMs = 3000, onClick = null) {
     const wrap = ensureContainer();
 
     const toast = document.createElement('div');
@@ -42,6 +43,7 @@ export function showToast(message, type = 'info', durationMs = 3000) {
 
     const timer = setTimeout(dismiss, durationMs);
     toast.addEventListener('click', () => {
+        if (onClick) onClick();
         clearTimeout(timer);
         dismiss();
     });
