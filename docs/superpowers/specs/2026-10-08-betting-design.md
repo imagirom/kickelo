@@ -244,7 +244,7 @@ prop per test type.
 Consistent with the existing `boxed` sections, red/blue select styling,
 toasts and confirm dialogs.
 
-**Currency.** Golden footballs: a gold variant of `public/assets/wm26ball.svg`
+**Currency.** Golden footballs: a gold variant of the standard ball `public/assets/football.svg`
 (gradient + slow diagonal shine; static under `prefers-reduced-motion`),
 shown inline at text size next to amounts.
 

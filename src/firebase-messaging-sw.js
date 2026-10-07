@@ -21,7 +21,7 @@ onBackgroundMessage(messaging, (payload) => {
 
   self.registration.showNotification(title, {
     body,
-    icon: '/assets/wm26ball.svg',
+    icon: '/assets/football.svg',
     data: { url }
   });
 });

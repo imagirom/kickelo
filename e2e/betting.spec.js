@@ -13,6 +13,7 @@ async function resetBettingState() {
 }
 
 test.beforeAll(async () => { await ensureTestUser(); await resetBettingState(); });
+test.afterAll(async () => { await resetBettingState(); }); // leave the emulator clean for manual testing
 
 async function pickLineup(page, [a1, a2, b1, b2]) {
   await page.selectOption('#teamA1', a1);
