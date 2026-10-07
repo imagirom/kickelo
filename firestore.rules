@@ -155,5 +155,35 @@ service cloud.firestore {
             && (!('songUri' in request.resource.data) || request.resource.data.songUri == null || request.resource.data.songUri is string)
             && (!('songPositionMs' in request.resource.data) || request.resource.data.songPositionMs is number);
     }
+
+    // --- Rules for the 'bets' collection (golden-football betting) ---
+    match /bets/{betId} {
+      function currentMatch() {
+        return get(/databases/$(database)/documents/meta/currentMatch).data;
+      }
+
+      allow get, list: if canAccess();
+
+      // House bets only while the current match has not had its first goal.
+      allow create: if canAccess()
+            && request.resource.data.kind == 'house'
+            && request.resource.data.bettor is string
+            && request.resource.data.stake is number
+            && request.resource.data.stake > 0
+            && request.resource.data.odds is number
+            && request.resource.data.odds >= 1
+            && request.resource.data.matchupKey is string
+            && request.resource.data.placedAt == request.time
+            && request.resource.data.void == false
+            && request.resource.data.matchupKey == currentMatch().matchupKey
+            && currentMatch().firstGoalAt == null;
+
+      // Phase 1: only voiding (undo).
+      allow update: if canAccess()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['void'])
+            && request.resource.data.void == true;
+
+      allow delete: if false;
+    }
   }
 }
