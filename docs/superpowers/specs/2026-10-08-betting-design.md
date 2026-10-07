@@ -91,6 +91,12 @@ challenges remain.
   matchupKey: "Manuel::Marc|Roman::Tobi",   // see Identity
   liveStartedAt: Timestamp | null,
   goalLog: [{team, timestamp}],    // mirrors the logging device
+  firstGoalAt: Timestamp | null,   // serverTimestamp() written with the first goal
+  offer: {                         // house offer, computed by the publishing device
+    winner: { red: 1.9, blue: 1.8 },
+    props: [{ outcome, oddsYes, oddsNo }],
+    gap: number                    // pre-match ELO gap used for pricing
+  } | null,
   updatedAt: serverTimestamp
 }
 ```
@@ -260,6 +266,10 @@ enabled and `meta/currentMatch` has a full lineup):
   any time; accepted challenges and house bets after the undo window cannot be
   voided from the UI.
 
+**Odds shown** come from `meta/currentMatch.offer`, not from each phone's own
+stats, so all phones show identical odds and props. A placed bet copies its odds
+from the offer.
+
 **Overwrite protection.** Before a device publishes a change to
 `meta/currentMatch` that changes the pairs (player selection, Suggest) or
 cancels live mode, while the current match is live or has ≥ 1 non-void bet,
@@ -277,8 +287,39 @@ No other leaderboard changes.
 - `meta/currentMatch`: covered by the existing `meta` rule.
 - `bets/{id}`: `read: canAccess()`; `create: canAccess()` with type checks
   (kind, stakes positive numbers, `placedAt == request.time`, odds number for
-  house); `update: canAccess()` only for `void`, `acceptedBy`, `acceptedAt`
-  (`acceptedAt == request.time`); `delete: false`.
+  house) and, for `kind == "house"`, `get(/meta/currentMatch)` must have the same
+  `matchupKey` and `firstGoalAt == null`; `update: canAccess()` only for `void`,
+  `acceptedBy`, `acceptedAt` (`acceptedAt == request.time`), with accept requiring
+  `acceptedBy == null && void == false` and challenge withdraw requiring
+  `acceptedBy == null`; `delete: false`.
+
+## Concurrency
+
+Firestore rules and transactions decide races at write time; the derived
+resolution re-checks everything from match data.
+
+1. **House bet vs first goal.** The logging device writes `firstGoalAt:
+   serverTimestamp()` with the first goal. The `bets` create rule reads
+   `meta/currentMatch` and allows a house bet only if its `matchupKey` equals the
+   current one and `firstGoalAt == null`, enforced against committed state at write
+   time. Resolution independently requires `placedAt < firstGoalAt` derived from
+   the logged match (see Resolution); a bet must pass both checks to count.
+   Rejected writes show "Bet not accepted — betting had closed".
+2. **Concurrent accepts / accept vs withdraw.** Accept and withdraw run in a
+   transaction; rules allow accept only if `acceptedBy == null && void == false`,
+   and challenge withdraw only if `acceptedBy == null`. Exactly one wins; the
+   loser sees a toast ("Already taken by Marc").
+3. **Stale overwrite dialog.** Pair changes and live-mode cancel are written in a
+   transaction that re-reads `meta/currentMatch`; if `updatedAt` differs from what
+   the dialog showed, the dialog is shown again with fresh counts.
+4. **Diverging odds across phones.** Solved by the published `offer` (see UI).
+5. **Concurrent stakes for one player.** Not prevented (rules cannot sum derived
+   balances). Balances may go slightly negative; further stakes are blocked until
+   positive.
+6. **Late offline bets.** Rejected by rule 1 when they reach the server.
+7. **Two phones starting live mode.** Starting live mode while `currentMatch` is
+   live goes through the overwrite confirmation; only the confirmed phone writes goals.
+8. **Bet between matches with a repeated lineup** resolves to the next match (intended).
 
 ## Phases
 
