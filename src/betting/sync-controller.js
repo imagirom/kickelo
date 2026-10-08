@@ -59,8 +59,15 @@ function renderNotShared() {
 
 const label = (pair) => getTeamRecord(teamKey(pair))?.name || pair.join(' + ');
 
-const openFor = (cur) => (cur?.matchupKey
-  ? openStakeFor(getBets(), allMatches || [], cur.matchupKey, Date.now()) : { count: 0, stake: 0 });
+/** Open bets on the shared matchup. A match this phone just logged has no server timestamp yet
+ *  (null until the write lands); it counts as logged now, so picking the next lineup right after
+ *  Submit does not claim that the just-resolved bets would be refunded. */
+function openFor(cur) {
+  if (!cur?.matchupKey) return { count: 0, stake: 0 };
+  const now = Date.now();
+  const matches = (allMatches || []).map((m) => (m.timestamp == null ? { ...m, timestamp: now } : m));
+  return openStakeFor(getBets(), matches, cur.matchupKey, now);
+}
 
 const newLiveId = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
@@ -134,29 +141,42 @@ function pushGoals() {
   })().catch(warn).finally(() => { goalPush = null; });
 }
 
-/** One reconcile pass: share the lineup, then claim live scoring if live mode runs here unowned. */
+/** One reconcile pass: share the lineup, then claim live scoring if live mode runs here unowned.
+ *  Taking over another phone's live match is always asked first, also when this phone's snapshot
+ *  had not shown it yet: the claim transaction then reports the fresh doc and the question follows. */
 async function syncOnce() {
   const { key } = readLineup();
   if (declined && !declined.endsWith(`>${key}`)) declined = null; // local lineup changed
   const live = liveLocal; // a live-start mid-pass re-runs the pass, so it always gets the takeover question
-  const cur = getCurrentMatch();
-  const takeover = live && !ownsLive(cur, liveId) && isLiveTakeover(cur, key);
-  if (takeover) {
-    const other = `${cur.matchupKey}#${cur.liveId}`;
-    if (takeoverDeclined === other) return;
-    const ok = await showConfirm('This match is already live on another phone.\nTake over live scoring here?',
-      { confirmLabel: 'Take over', cancelLabel: 'Keep other phone', type: 'warning' });
-    if (!ok) { takeoverDeclined = other; return; }
-    liveId = null; // re-claim below
+  let cur = getCurrentMatch();
+  let takeoverOf = null; // liveId of the other phone the user agreed to take over from
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (live && !ownsLive(cur, liveId) && isLiveTakeover(cur, key) && cur.liveId !== takeoverOf) {
+      const other = `${cur.matchupKey}#${cur.liveId}`;
+      if (takeoverDeclined === other) return;
+      const ok = await showConfirm('This match is already live on another phone.\nTake over live scoring here?',
+        { confirmLabel: 'Take over', cancelLabel: 'Keep other phone', type: 'warning' });
+      if (!ok) { takeoverDeclined = other; return; }
+      liveId = null; // re-claim below
+      takeoverOf = cur.liveId;
+    }
+    if (!(await syncLineup())) return;
+    const nowKey = readLineup().key;
+    if (!live || !liveLocal || (liveId && liveKey === nowKey)) return;
+    const claim = newLiveId();
+    const goals = localGoals;
+    const epoch = liveEpoch;
+    try {
+      await publishLiveStart(claim, nowKey, goals, takeoverOf);
+    } catch (err) {
+      if (err.message !== 'stale') throw err;
+      cur = err.current ?? null;
+      continue;
+    }
+    claimed(claim, nowKey, goals, epoch);
+    return;
   }
-  if (!(await syncLineup())) return;
-  const nowKey = readLineup().key;
-  if (!live || !liveLocal || (liveId && liveKey === nowKey)) return;
-  const claim = newLiveId();
-  const goals = localGoals;
-  const epoch = liveEpoch;
-  await publishLiveStart(claim, nowKey, goals);
-  claimed(claim, nowKey, goals, epoch);
+  throw new Error('stale');
 }
 
 /** Coalesces bursts (notifyRolesChanged fires once per team) into one pass per tick and never

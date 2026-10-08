@@ -54,10 +54,12 @@ export function available(bettor) {
   return (w?.balance ?? 0) + (hasBetToday ? 0 : BETTING.dailyAllowance);
 }
 
-/** outcome: { test, team, threshold?, negate?, propId? }; propId (prop bets) is only used to look up odds. */
-export async function placeHouseBet({ bettor, stake, outcome }) {
+/** outcome: { test, team, threshold?, negate?, propId? }; propId (prop bets) is only used to look up odds.
+ *  expectedOdds / matchupKey: what the sheet showed; a republished offer in between throws 'changed'. */
+export async function placeHouseBet({ bettor, stake, outcome, expectedOdds, matchupKey }) {
   const cm = getCurrentMatch();
   if (!cm?.offer || cm.firstGoalAt) throw new Error('closed');
+  if (matchupKey !== undefined && cm.matchupKey !== matchupKey) throw new Error('changed');
   const { propId, ...rest } = outcome;
   let odds;
   if (rest.test === 'winner') {
@@ -67,6 +69,7 @@ export async function placeHouseBet({ bettor, stake, outcome }) {
     if (!prop) throw new Error('closed');
     odds = rest.negate ? prop.oddsNo : prop.oddsYes;
   }
+  if (expectedOdds !== undefined && odds !== expectedOdds) throw new Error('changed');
   const bet = {
     kind: 'house', matchupKey: cm.matchupKey, bettor, stake, odds,
     outcome: {
@@ -101,10 +104,12 @@ const deniedChallenge = (ref, acceptor) => async (err) => {
   throw new Error(deniedChallengeReason(snap.exists() ? snap.data() : null, acceptor));
 };
 
-/** outcome: { test, team, threshold?, negate? } claimed by the challenger; the acceptor takes the opposite side. */
-export async function placeChallenge({ challenger, opponent, outcome, challengerStake, opponentStake }) {
+/** outcome: { test, team, threshold?, negate? } claimed by the challenger; the acceptor takes the opposite side.
+ *  matchupKey: the match the form was opened on; a replaced lineup in between throws 'changed'. */
+export async function placeChallenge({ challenger, opponent, outcome, challengerStake, opponentStake, matchupKey }) {
   const cm = getCurrentMatch();
   if (!cm?.matchupKey) throw new Error('closed');
+  if (matchupKey !== undefined && cm.matchupKey !== matchupKey) throw new Error('changed');
   const bet = {
     kind: 'challenge', matchupKey: cm.matchupKey, challenger, opponent: opponent || null, challengerStake, opponentStake,
     outcome: {

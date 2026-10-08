@@ -247,7 +247,9 @@ console.log('\n=== outcome tests ===');
   const lab = (p) => (p[0] === 'Manuel' ? 'MaMa' : p.join(' + '));
   assertEq(describeOutcome(o('marginAtLeast', { team: R, threshold: 3 }), lab), 'MaMa win by 3+', 'describe margin');
   assertEq(describeOutcome(o('durationOver', { threshold: 270 }), lab), 'Over 4:30', 'describe duration');
-  assertEq(describeOutcome(o('goesToFourFour', { negate: true }), lab), 'Not: Goes to 4:4', 'describe negation');
+  assertEq(describeOutcome(o('goesToFourFour', { negate: true }), lab), "Doesn't go to 4:4", 'describe negation positively');
+  assertEq(describeOutcome(o('winner', { team: R, negate: true }), lab), 'MaMa lose', 'negated winner reads as a loss');
+  assertEq(describeOutcome(o('comebackAtLeast', { team: B, threshold: 1, negate: true }), lab), 'No Roman + Tobi comeback from 1 down', 'negated comeback');
 }
 
 console.log('\n=== path enumeration ===');

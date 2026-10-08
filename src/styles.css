@@ -2426,7 +2426,7 @@ body.paused > *:not(#pauseOverlay) {
 .bets-header-icon { height: 2em; width: 2em; flex: 0 0 auto; }
 .bets-live { display: flex; flex-direction: column; gap: 6px; }
 .bets-live-top { display: flex; align-items: center; justify-content: center; gap: 12px; }
-.bets-live-dot { color: var(--accent-red); font-weight: 600; font-size: 0.9em; }
+.bets-live-dot { color: #e0858f; font-weight: 600; font-size: 0.9em; } /* lighter than --accent-red: 4.8:1 on the box */
 .bets-live-score { font-size: 1.2em; font-weight: 600; font-variant-numeric: tabular-nums; }
 .bets-odds button { flex: 1; font-size: 1em; padding: 8px 12px; border-radius: 5px; }
 .bets-odds button.red_select { background: var(--dark-red); border: 2px solid var(--accent-red); text-align: center; }
@@ -2434,30 +2434,38 @@ body.paused > *:not(#pauseOverlay) {
 .bets-odds button:disabled { opacity: 0.5; cursor: default; }
 .bets-prop { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .bets-prop-label { flex: 1; min-width: 0; font-size: 0.9em; }
-.bets-prop-btn { flex: 0 0 auto; width: auto; min-width: 5.5em; padding: 6px 10px; border-radius: 5px; font-variant-numeric: tabular-nums; }
+.bets-prop-btn { flex: 0 0 auto; width: auto; min-width: 5.5em; min-height: 44px; padding: 6px 10px; border-radius: 5px; font-variant-numeric: tabular-nums; }
 .bets-prop-btn:disabled { opacity: 0.5; cursor: default; }
 .bets-caption, .bets-hint { font-size: 0.85em; color: var(--text-color-secondary); text-align: center; margin: 4px 0 0; }
-.bets-feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 0.9em; }
-.bets-feed li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4em; }
+.bets-feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; font-size: 0.9em; }
+.bets-feed li { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.bets-feed li:first-child { border-top: none; }
+.bets-feed-top { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4em; }
+.bets-feed-what { color: var(--text-color-secondary); }
+.bets-feed-stakes { display: inline-flex; align-items: center; gap: 0.3em; }
+.bets-feed-heading { font-size: 0.85em; color: var(--text-color-secondary); margin-top: 8px; text-transform: uppercase; letter-spacing: 0.04em; }
 .bets-feed-bettor { font-weight: 600; }
 .bets-feed-result { margin-left: auto; color: var(--text-color-secondary); }
 .bets-feed-result.won { color: #f2c230; }
 .bet-sheet { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
 .bet-sheet-title { font-weight: 600; }
 .bet-sheet-chips { display: flex; gap: 8px; align-items: center; }
-.bet-chip { flex: 0 0 auto; width: auto; padding: 6px 12px; }
-.bet-sheet-stake { flex: 1; min-width: 0; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--input-border-color); background: var(--gray-dark); color: var(--text-color-primary); }
+.bet-chip { flex: 0 0 auto; width: auto; min-width: 44px; min-height: 44px; padding: 6px 12px; }
+.bet-sheet-stake { flex: 1; min-width: 0; min-height: 44px; box-sizing: border-box; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--input-border-color); background: var(--gray-dark); color: var(--text-color-primary); }
 .bet-sheet-info { font-size: 0.9em; color: var(--text-color-secondary); font-variant-numeric: tabular-nums; }
-.bets-challenge-btn { padding: 8px 12px; border-radius: 5px; font-size: 0.95em; }
-.bets-feed-actions { margin-left: auto; display: inline-flex; gap: 6px; }
-.bets-feed-btn { width: auto; padding: 4px 10px; border-radius: 5px; font-size: 0.9em; }
+.bets-challenge-btn { min-height: 44px; padding: 8px 12px; border-radius: 5px; font-size: 0.95em; }
+.bets-feed-actions { align-self: flex-end; display: inline-flex; align-items: center; gap: 20px; } /* Withdraw well away from Accept */
+.bets-feed-btn { width: auto; min-height: 44px; padding: 4px 14px; border-radius: 5px; font-size: 0.9em; }
 .bets-feed-btn.bets-accept { border: 1px solid #f2c230; }
-.bets-feed-btn.bets-withdraw { background: transparent; box-shadow: none; color: var(--text-color-secondary); padding: 4px 6px; }
+.bets-feed-btn.bets-withdraw { background: transparent; box-shadow: none; color: var(--text-color-secondary); padding: 4px 8px; }
 .bet-sheet-field { display: flex; align-items: center; gap: 8px; }
 .bet-sheet-field[hidden] { display: none; }
 .bet-sheet-field-label { flex: 0 0 6.5em; font-size: 0.9em; color: var(--text-color-secondary); }
-.bet-sheet-field > select, .bet-sheet-field > input { flex: 1; min-width: 0; max-width: none; }
+.bet-sheet-field > select, .bet-sheet-field > input { flex: 1; min-width: 0; max-width: none; min-height: 44px; }
 .bet-sheet-chips .bet-sheet-field { flex: 1; min-width: 0; }
 .bet-sheet-chips .bet-sheet-field-label { flex-basis: auto; }
 .bet-chip.active { outline: 2px solid #f2c230; }
 .challenge-side .bet-chip { flex: 1; }
+
+/* Betting dialogs are used one-handed outdoors: full-size dialog buttons */
+.confirm-dialog .confirm-btn { min-height: 44px; }

@@ -73,13 +73,14 @@ export async function publishPositions({ red, blue, positions }, { guard = () =>
   });
 }
 
-/** Claims live scoring for this device on matchup `key`. firstGoalAt is stamped from the goals so far
+/** Claims live scoring for this device on matchup `key` (taking over `takeoverOf`, if given). firstGoalAt is stamped from the goals so far
  *  only if this matchup's betting has not closed yet (liveClaimUpdate); it is never cleared here. */
 // ponytail: liveStartedAt is the claim time, so a late claim (teams set after kick-off) shows a short spectator timer.
-export async function publishLiveStart(liveId, key, goalLog) {
+export async function publishLiveStart(liveId, key, goalLog, takeoverOf = null) {
   await runTransaction(db, async (tx) => {
     const fresh = await readIn(tx);
-    if (fresh?.matchupKey !== key) throw staleError(fresh);
+    // another phone's live match is only taken over when the user agreed to exactly that one
+    if (fresh?.matchupKey !== key || (fresh.liveId && fresh.liveId !== takeoverOf)) throw staleError(fresh);
     const update = { ...liveClaimUpdate(fresh, key, goalLog), liveStartedAt: serverTimestamp(), liveId, updatedAt: serverTimestamp() };
     if (update.firstGoalAt === 'SERVER') update.firstGoalAt = serverTimestamp();
     tx.update(ref(), update);

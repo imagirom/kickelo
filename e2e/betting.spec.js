@@ -184,8 +184,13 @@ test('house props: at most count rows, a "No" bet shows on both feeds', async ({
     await b.locator('.confirm-dialog select.bet-sheet-bettor').selectOption(names[1]);
     await b.locator('.confirm-dialog input[type=number]').fill('5');
     await b.locator('.confirm-btn-ok').click();
-    await expect(box.locator('.bets-feed')).toContainText(`Not: ${desc}`);
-    await expect(a.locator('#betsBox .bets-feed')).toContainText(`Not: ${desc}`);
+    // the "No" side is phrased positively, so it is a different text from the prop label
+    for (const p of [b, a]) {
+      const li = p.locator('#betsBox .bets-feed li');
+      await expect(li).toHaveCount(1);
+      await expect(li).toContainText(names[1]);
+      expect((await li.locator('.bets-feed-what').textContent()).startsWith(`${desc} ·`)).toBe(false);
+    }
   }
   await ctxA.close();
   await ctxB.close();
@@ -209,7 +214,7 @@ test('challenges: one of two concurrent accepts wins, withdraw hides Accept', as
     await dlg.locator('select.challenge-challenger').selectOption(names[4]);
     await dlg.locator('select.challenge-test').selectOption('goesToFourFour');
     await dlg.locator('button', { hasText: 'I bet against' }).click();
-    await expect(dlg.locator('.challenge-preview')).toHaveText('Not: Goes to 4:4');
+    await expect(dlg.locator('.challenge-preview')).toHaveText("Doesn't go to 4:4");
     await dlg.locator('input.challenge-my-stake').fill(String(myStake));
     await dlg.locator('input.challenge-their-stake').fill('30');
     await a.locator('.confirm-btn-ok').click();
@@ -234,6 +239,8 @@ test('challenges: one of two concurrent accepts wins, withdraw hides Accept', as
   await postChallenge(7);
   await expect(line(b, 7).locator('button', { hasText: 'Accept' })).toBeVisible();
   await line(a, 7).locator('button', { hasText: 'Withdraw' }).click();
+  await expect(a.locator('.confirm-dialog')).toContainText(`Withdraw ${names[4]}'s challenge?`);
+  await a.locator('.confirm-btn-ok').click();
   await expect(line(b, 7)).toHaveCount(0);
 
   await ctxA.close();
@@ -293,4 +300,71 @@ test('after a declined takeover, this phone claims live scoring once the other p
   await expect.poll(async () => (await shared())?.goalLog?.arrayValue?.values?.length ?? 0).toBe(1);
   await ctxA.close();
   await ctxB.close();
+});
+
+async function matchesSince(ms) {
+  const res = await fetch(`${DOCS}:runQuery`, { method: 'POST', headers: OWNER, body: JSON.stringify({ structuredQuery: {
+    from: [{ collectionId: 'matches' }],
+    where: { fieldFilter: { field: { fieldPath: 'timestamp' }, op: 'GREATER_THAN_OR_EQUAL', value: { timestampValue: new Date(ms).toISOString() } } },
+  } }) });
+  return (await res.json()).filter((r) => r.document);
+}
+
+async function deleteMatchesSince(ms) {
+  const rows = await matchesSince(ms);
+  await Promise.all(rows.map((r) => fetch(`${DOCS}/${r.document.name.split('/documents/')[1]}`, { method: 'DELETE', headers: OWNER })));
+}
+
+test('pre-match challenges close at the first goal; results stay visible after the next lineup', async ({ browser }) => {
+  const since = Date.now();
+  const { ctx: ctxA, page: a } = await openPhone(browser);
+  const { ctx: ctxB, page: b } = await openPhone(browser);
+  try {
+    const names = await playerNames(a);
+    await pickLineup(a, names.slice(0, 4));
+    const box = b.locator('#betsBox');
+    await expect(box).toContainText('counts only if the match is scored in live mode', { timeout: 10000 });
+
+    await box.locator('button', { hasText: 'Red wins' }).click();
+    await b.locator('.confirm-dialog select.bet-sheet-bettor').selectOption(names[1]);
+    await b.getByRole('button', { name: '5', exact: true }).click();
+    await expect(b.getByRole('button', { name: '5', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await b.locator('.confirm-btn-ok').click();
+
+    await a.locator('#betsBox .bets-challenge-btn').click();
+    await a.locator('.confirm-dialog select.challenge-challenger').selectOption(names[4]);
+    await a.locator('.confirm-btn-ok').click();
+    const challenge = box.locator('.bets-feed li.bets-feed-challenge');
+    await expect(challenge.locator('button', { hasText: 'Accept' })).toBeVisible();
+
+    await a.click('#toggleLiveMode');
+    await a.click('#btnRedScored');
+    await expect(box).toContainText('Closed at first goal · odds were');
+    await expect(challenge).toContainText('closed at first goal');
+    await expect(challenge.locator('button', { hasText: 'Accept' })).toHaveCount(0);
+
+    // Final-score submit on the shared matchup, then the next lineup: the result is still shown.
+    await a.click('#cancelLiveMode');
+    await a.locator('.confirm-btn-ok').click();
+    await a.selectOption('#teamAgoals', '5');
+    await a.selectOption('#teamBgoals', '3');
+    await a.click('#submitMatchBtn');
+    await expect(a.locator('.confirm-dialog')).toContainText('positions');
+    await a.locator('.confirm-btn-ok').click();
+    const submit = a.locator('.confirm-dialog', { hasText: 'Confirm match submission' });
+    await submit.locator('.confirm-btn-ok').click();
+    // right after Submit (the form resets once it is done): the logged bets are not "refunded"
+    await expect(a.locator('.toast-message', { hasText: 'Match submitted' })).toBeVisible();
+    await expect(a.locator('#teamA1')).toHaveValue('');
+    await pickLineup(a, [names[0], names[4], names[2], names[5]]);
+    await a.waitForTimeout(500);
+    await expect(a.locator('.confirm-dialog')).toHaveCount(0);
+    await expect.poll(async () => (await matchesSince(since)).length, { timeout: 10000 }).toBe(1);
+    await expect(box.locator('.bets-feed-heading')).toContainText('Last match', { timeout: 10000 });
+    await expect(box).toContainText('refunded');
+  } finally {
+    await ctxA.close();
+    await ctxB.close();
+    await deleteMatchesSince(since - 60000);
+  }
 });

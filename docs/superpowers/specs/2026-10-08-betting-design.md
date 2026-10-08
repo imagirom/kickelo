@@ -261,17 +261,23 @@ enabled and `meta/currentMatch` has a full lineup):
 - Live row (only on phones not running live mode): ● LIVE, timer, score,
   `createTimelineSVG(goalLog)`. Read-only.
 - House section: "Red wins ×", "Blue wins ×", and the seeded props with yes/no
-  odds. Label "closes at first goal"; disabled with "Closed at first goal" afterwards.
+  odds. Label "Closes at first goal" (plus "counts only if the match is scored in
+  live mode" while no phone is live); after the first goal the section collapses to
+  one line "Closed at first goal · odds were …".
 - "Challenge someone…" opens the challenge form: challenger, opponent
   (player or **anyone**), outcome test, threshold, both stakes.
 - Feed: all non-void bets on the current matchup, live via `onSnapshot`;
-  open challenges show **Accept** (if opponent is anyone or the selected player).
+  open challenges show **Accept** (if opponent is anyone or the selected player;
+  "closed at first goal" for pre-match challenges after it). Below, the results of
+  the last logged match today if the shared lineup has moved on ("Last match").
+- Accept sheet: the acceptor's side in positive form ("You back: X lose"), the
+  stakes, and the live score with the time the challenge was posted.
 - Placing a bet: sheet in `showConfirm` style — bettor (dropdown, remembered per
   device in localStorage), stake (chips 5/10/25 + number field), payout,
   bettor's balance. After placing, a toast offers **Undo** within `undoWindowMs`
-  (sets `void: true`). An unaccepted challenge can be withdrawn by its challenger at
-  any time; accepted challenges and house bets after the undo window cannot be
-  voided from the UI.
+  (sets `void: true`). An unaccepted challenge can be withdrawn at any time, from any
+  phone (no accounts) after a confirmation; accepted challenges and house bets after
+  the undo window cannot be voided (rules allow a house-bet void for 60 s).
 
 **Odds shown** come from `meta/currentMatch.offer`, not from each phone's own
 stats, so all phones show identical odds and props. A placed bet copies its odds

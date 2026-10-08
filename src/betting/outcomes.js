@@ -74,18 +74,19 @@ export function evaluateOutcome(match, outcome) {
 
 export const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
+/** Plain-language outcome; a negated one is phrased positively ("X lose"), not as "Not: X win". */
 export function describeOutcome(outcome, labelOf) {
   const t = outcome.team ? labelOf(outcome.team) : '';
   const k = outcome.threshold;
-  const text = {
-    winner: `${t} win`,
-    marginAtLeast: `${t} win by ${k}+`,
-    shutout: `${t} win 5:0`,
-    goesToFourFour: 'Goes to 4:4',
-    durationOver: `Over ${mmss(k)}`,
-    scoresFirst: `${t} score first`,
-    firstScorerWins: 'First scorer wins',
-    comebackAtLeast: `${t} comeback from ${k} down`,
-  }[outcome.test] || outcome.test;
-  return outcome.negate ? `Not: ${text}` : text;
+  const [yes, no] = {
+    winner: [`${t} win`, `${t} lose`],
+    marginAtLeast: [`${t} win by ${k}+`, `${t} don't win by ${k}+`],
+    shutout: [`${t} win 5:0`, `${t} don't win 5:0`],
+    goesToFourFour: ['Goes to 4:4', "Doesn't go to 4:4"],
+    durationOver: [`Over ${mmss(k)}`, `Not over ${mmss(k)}`],
+    scoresFirst: [`${t} score first`, `${t} don't score first`],
+    firstScorerWins: ['First scorer wins', 'First scorer loses'],
+    comebackAtLeast: [`${t} comeback from ${k} down`, `No ${t} comeback from ${k} down`],
+  }[outcome.test] || [outcome.test, `Not: ${outcome.test}`];
+  return outcome.negate ? no : yes;
 }
