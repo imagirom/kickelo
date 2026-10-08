@@ -1,9 +1,9 @@
 // src/betting/bets-service.js
 // Real-time 'bets' collection + placing/undoing house bets.
-import { db, collection, doc, addDoc, updateDoc, onSnapshot, serverTimestamp } from '../firebase-service.js';
+import { db, collection, doc, addDoc, updateDoc, onSnapshot, serverTimestamp, runTransaction } from '../firebase-service.js';
 import { allMatches } from '../match-data-service.js';
 import { BETTING } from './betting-config.js';
-import { computeBalances, checkBet, resolveHouseBet, dayKey } from './ledger.js';
+import { computeBalances, checkBet, resolveHouseBet, resolveChallenge, dayKey, acceptDecision } from './ledger.js';
 import { getCurrentMatch } from './current-match-service.js';
 import { teamKey } from '../teams/team-identity.js';
 
@@ -21,7 +21,8 @@ export function initializeBets() {
     allBets = [];
     snap.forEach((d) => {
       const data = d.data({ serverTimestamps: 'estimate' });
-      allBets.push({ id: d.id, ...data, placedAt: data.placedAt?.toMillis?.() ?? Date.now() });
+      allBets.push({ id: d.id, ...data, placedAt: data.placedAt?.toMillis?.() ?? Date.now(),
+        ...(data.acceptedBy ? { acceptedAt: data.acceptedAt?.toMillis?.() ?? Date.now() } : {}) });
     });
     window.dispatchEvent(new CustomEvent('bets-updated'));
   }, (error) => console.error('Error listening to bets:', error));
@@ -37,14 +38,19 @@ export function getBalances() {
 
 export function getOpenBetsFor(key) {
   const now = Date.now();
-  return allBets.filter((b) => !b.void && b.kind === 'house' && b.matchupKey === key
-    && resolveHouseBet(b, allMatches || [], now).status === 'open');
+  const matches = allMatches || [];
+  return allBets.filter((b) => !b.void && b.matchupKey === key && (
+    (b.kind === 'house' && resolveHouseBet(b, matches, now).status === 'open')
+    || (b.kind === 'challenge' && ['open', 'pending'].includes(resolveChallenge(b, matches, now).status))));
 }
 
 /** Spendable now: wallet balance, plus today's allowance if no bet placed today. */
 export function available(bettor) {
   const w = getBalances().get(bettor);
-  const hasBetToday = allBets.some((b) => !b.void && b.bettor === bettor && dayKey(b.placedAt) === dayKey(Date.now()));
+  const today = dayKey(Date.now());
+  const hasBetToday = allBets.some((b) => !b.void && (
+    ((b.bettor === bettor || b.challenger === bettor) && dayKey(b.placedAt) === today)
+    || (b.acceptedBy === bettor && typeof b.acceptedAt === 'number' && dayKey(b.acceptedAt) === today)));
   return (w?.balance ?? 0) + (hasBetToday ? 0 : BETTING.dailyAllowance);
 }
 
@@ -83,4 +89,50 @@ export async function placeHouseBet({ bettor, stake, outcome }) {
 
 export async function undoBet(id) {
   await updateDoc(doc(db, 'bets', id), { void: true });
+}
+
+const deniedAsClosed = (err) => { throw err?.code === 'permission-denied' ? new Error('closed') : err; };
+
+/** outcome: { test, team, threshold?, negate? } claimed by the challenger; the acceptor takes the opposite side. */
+export async function placeChallenge({ challenger, opponent, outcome, challengerStake, opponentStake }) {
+  const cm = getCurrentMatch();
+  if (!cm?.matchupKey) throw new Error('closed');
+  const bet = {
+    kind: 'challenge', matchupKey: cm.matchupKey, challenger, opponent: opponent || null, challengerStake, opponentStake,
+    outcome: {
+      test: outcome.test, team: outcome.team ? [...outcome.team].sort() : null,
+      threshold: outcome.threshold ?? null, negate: Boolean(outcome.negate),
+    },
+    acceptedBy: null, acceptedAt: null, void: false,
+  };
+  const verdict = checkBet(bet, { currentMatch: cm });
+  if (!verdict.ok) throw new Error(verdict.reason);
+  if (challengerStake > available(challenger)) throw new Error('insufficient');
+  const ref = await addDoc(collection(db, 'bets'), { ...bet, placedAt: serverTimestamp() }).catch(deniedAsClosed);
+  return ref.id;
+}
+
+export async function acceptChallenge(id, acceptor) {
+  const local = allBets.find((b) => b.id === id);
+  if (local && local.opponentStake > available(acceptor)) throw new Error('insufficient');
+  const ref = doc(db, 'bets', id);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error('withdrawn');
+    const c = snap.data();
+    const decision = acceptDecision(c, acceptor);
+    if (decision === 'taken') throw new Error(`taken:${c.acceptedBy}`);
+    if (decision !== 'ok') throw new Error(decision);
+    tx.update(ref, { acceptedBy: acceptor, acceptedAt: serverTimestamp() });
+  }).catch(deniedAsClosed);
+}
+
+export async function withdrawChallenge(id) {
+  const ref = doc(db, 'bets', id);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const c = snap.data();
+    if (c?.acceptedBy) throw new Error(`taken:${c.acceptedBy}`);
+    tx.update(ref, { void: true });
+  });
 }

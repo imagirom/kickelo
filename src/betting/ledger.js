@@ -98,6 +98,32 @@ export function computeBalances(bets, matches, now, cfg = BETTING) {
   return wallets;
 }
 
+/** Open stake on a matchup (for the overwrite dialog): open house bets and open/pending challenges. */
+export function openStakeFor(bets, matches, key, now) {
+  let count = 0;
+  let stake = 0;
+  for (const b of bets) {
+    if (b.void || b.matchupKey !== key) continue;
+    if (b.kind === 'house' && resolveHouseBet(b, matches, now).status === 'open') {
+      count++;
+      stake += b.stake;
+    } else if (b.kind === 'challenge' && ['open', 'pending'].includes(resolveChallenge(b, matches, now).status)) {
+      count++;
+      stake += b.challengerStake + (b.acceptedBy ? b.opponentStake : 0);
+    }
+  }
+  return { count, stake };
+}
+
+/** Whether `acceptor` may accept challenge doc `c` (checked inside the accept transaction). */
+export function acceptDecision(c, acceptor) {
+  if (c.acceptedBy) return 'taken';
+  if (c.void) return 'withdrawn';
+  if (c.opponent && c.opponent !== acceptor) return 'not-you';
+  if (acceptor === c.challenger) return 'own';
+  return 'ok';
+}
+
 /** House rules hook. "Anything goes" for now. */
 export function checkBet(_bet, _context) {
   return { ok: true };

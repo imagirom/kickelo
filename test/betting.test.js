@@ -3,7 +3,7 @@
 import { BETTING, houseBetsActive } from '../src/betting/betting-config.js';
 import { matchupKey, isFullLineup, sameTeam } from '../src/betting/matchup.js';
 import { goalProbability, scorelineDistribution, winProbability, toOdds, logLikelihood, pathDistribution, outcomeProbability, normalCdf } from '../src/betting/model.js';
-import { dayKey, firstGoalAt, resolveHouseBet, resolveChallenge, computeBalances, checkBet } from '../src/betting/ledger.js';
+import { dayKey, firstGoalAt, resolveHouseBet, resolveChallenge, computeBalances, checkBet, openStakeFor, acceptDecision } from '../src/betting/ledger.js';
 import { shouldClearAfterSubmit, buildOffer, shouldPublishLineup, needsOverwriteConfirm, goalUpdate, isLiveTakeover, ownsLive, showNotSharedHint, liveClaimUpdate } from '../src/betting/current-match.js';
 import params from '../src/betting/model-params.json' with { type: 'json' };
 import { OUTCOME_TESTS, evaluateOutcome, describeOutcome } from '../src/betting/outcomes.js';
@@ -357,6 +357,30 @@ console.log('\n=== challenges in the ledger ===');
   assertEq(open.get('Simon'), { balance: 90, todayDelta: -10, open: 1 }, 'open challenge holds the challenger stake');
   assertEq(open.has('Peter'), false, 'no acceptor yet -> no wallet');
   assertEq(computeBalances([ch({ void: true })], [], day + 1000).size, 0, 'withdrawn challenge ignored');
+}
+
+console.log('\n=== challenge accept decision and overwrite stake ===');
+{
+  const c = { challenger: 'Simon', opponent: null, acceptedBy: null, void: false };
+  assertEq(acceptDecision(c, 'Peter'), 'ok', 'open challenge -> ok');
+  assertEq(acceptDecision({ ...c, acceptedBy: 'Tobi' }, 'Peter'), 'taken', 'already accepted -> taken');
+  assertEq(acceptDecision({ ...c, void: true }, 'Peter'), 'withdrawn', 'withdrawn -> withdrawn');
+  assertEq(acceptDecision({ ...c, opponent: 'Tobi' }, 'Peter'), 'not-you', 'addressed to someone else -> not-you');
+  assertEq(acceptDecision({ ...c, opponent: 'Peter' }, 'Peter'), 'ok', 'addressed to me -> ok');
+  assertEq(acceptDecision(c, 'Simon'), 'own', 'own challenge -> own');
+
+  const day = new Date(2026, 9, 8, 12).getTime();
+  const key = 'Manuel::Marc|Roman::Tobi';
+  const R = ['Manuel', 'Marc']; const B = ['Roman', 'Tobi'];
+  const house = { kind: 'house', matchupKey: key, placedAt: day, bettor: 'Simon', stake: 20, odds: 2, outcome: { test: 'winner', team: R }, void: false };
+  const chal = { kind: 'challenge', matchupKey: key, placedAt: day, challenger: 'Peter', challengerStake: 10, opponent: null, opponentStake: 30,
+    outcome: { test: 'winner', team: R }, acceptedBy: 'Tobi', acceptedAt: day + 1000, void: false };
+  const other = { ...house, matchupKey: 'A::B|C::D' };
+  const m = { id: 'x', timestamp: day + 600000, teamA: R, teamB: B, winner: 'A', goalsA: 5, goalsB: 1, matchDuration: 240000, goalLog: [{ team: 'red', timestamp: 1 }] };
+  const resolved = { ...house, placedAt: day - 3600000 };
+  assertEq(openStakeFor([house, chal, other, { ...house, void: true }], [], key, day + 2000), { count: 2, stake: 60 }, 'open house + accepted challenge counted');
+  assertEq(openStakeFor([resolved], [m], key, day + 700000), { count: 0, stake: 0 }, 'resolved bets ignored');
+  assertEq(openStakeFor([{ ...chal, acceptedBy: null, acceptedAt: null }], [], key, day + 2000), { count: 1, stake: 10 }, 'unaccepted challenge: challenger stake only');
 }
 
 // --- further sections are appended by later tasks above this line ---

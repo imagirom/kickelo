@@ -164,26 +164,51 @@ service cloud.firestore {
 
       allow get, list: if canAccess();
 
-      // House bets only while the current match has not had its first goal.
+      function isHouse() { return request.resource.data.kind == 'house'; }
+      function isChallenge() { return request.resource.data.kind == 'challenge'; }
+
+      // House bets only while the current match has not had its first goal;
+      // challenges any time while their matchup is the shared one.
       allow create: if canAccess()
-            && request.resource.data.kind == 'house'
-            && request.resource.data.bettor is string
-            && request.resource.data.stake is number
-            && request.resource.data.stake > 0
-            && request.resource.data.odds is number
-            && request.resource.data.odds >= 1
             && request.resource.data.matchupKey is string
+            && request.resource.data.matchupKey == currentMatch().matchupKey
             && request.resource.data.placedAt == request.time
             && request.resource.data.void == false
             && request.resource.data.outcome.test is string
-            && request.resource.data.matchupKey == currentMatch().matchupKey
-            && currentMatch().firstGoalAt == null
-            && currentMatch().offer != null;
+            && (
+              (isHouse()
+                && request.resource.data.bettor is string
+                && request.resource.data.stake is number && request.resource.data.stake > 0
+                && request.resource.data.odds is number && request.resource.data.odds >= 1
+                && currentMatch().firstGoalAt == null
+                && currentMatch().offer != null)
+              ||
+              (isChallenge()
+                && request.resource.data.challenger is string
+                && (request.resource.data.opponent == null || request.resource.data.opponent is string)
+                && request.resource.data.challengerStake is number && request.resource.data.challengerStake > 0
+                && request.resource.data.opponentStake is number && request.resource.data.opponentStake > 0
+                && request.resource.data.acceptedBy == null
+                && request.resource.data.acceptedAt == null)
+            );
 
-      // Phase 1: only voiding (undo).
-      allow update: if canAccess()
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['void'])
-            && request.resource.data.void == true;
+      allow update: if canAccess() && (
+            // undo / withdraw: only voiding, and a challenge only while unaccepted
+            (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['void'])
+              && request.resource.data.void == true
+              && (resource.data.kind != 'challenge' || resource.data.acceptedBy == null))
+            ||
+            // accept: once, not withdrawn, by the named opponent (or anyone), not the challenger
+            (resource.data.kind == 'challenge'
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['acceptedBy', 'acceptedAt'])
+              && resource.data.acceptedBy == null
+              && resource.data.void == false
+              && request.resource.data.acceptedBy is string
+              && request.resource.data.acceptedBy != resource.data.challenger
+              && (resource.data.opponent == null || request.resource.data.acceptedBy == resource.data.opponent)
+              && request.resource.data.acceptedAt == request.time
+              && currentMatch().matchupKey == resource.data.matchupKey)
+          );
 
       allow delete: if false;
     }

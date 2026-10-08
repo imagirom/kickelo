@@ -9,7 +9,9 @@ import { BETTING } from './betting-config.js';
 import { matchupKey, isFullLineup } from './matchup.js';
 import { shouldClearAfterSubmit, shouldPublishLineup, needsOverwriteConfirm, isLiveTakeover, ownsLive, liveClaimUpdate, showNotSharedHint } from './current-match.js';
 import { getCurrentMatch, publishLineup, publishPositions, publishLiveStart, publishGoal, publishLiveEnd } from './current-match-service.js';
-import { getOpenBetsFor } from './bets-service.js';
+import { getBets } from './bets-service.js';
+import { openStakeFor } from './ledger.js';
+import { allMatches } from '../match-data-service.js';
 
 let initialized = false;
 let liveId = null; // set while this device owns the live match in the shared doc
@@ -64,13 +66,12 @@ async function syncLineup(retry = true) {
     return true;
   }
   const expectedUpdatedAtMs = current?.updatedAt?.toMillis?.() ?? null;
-  const open = current?.matchupKey ? getOpenBetsFor(current.matchupKey) : [];
-  if (needsOverwriteConfirm(current, key, open.length)) {
+  const open = current?.matchupKey ? openStakeFor(getBets(), allMatches || [], current.matchupKey, Date.now()) : { count: 0, stake: 0 };
+  if (needsOverwriteConfirm(current, key, open.count)) {
     const pair = `${current.matchupKey}>${key}`;
     if (declined === pair) return false;
-    const stake = open.reduce((sum, b) => sum + b.stake, 0);
     const lines = [`Replace the current match ${label(current.red)} vs ${label(current.blue)}?`];
-    if (open.length) lines.push(`${open.length} bet${open.length === 1 ? '' : 's'} (${stake} golden footballs) will be refunded unless this lineup plays again today.`);
+    if (open.count) lines.push(`${open.count} bet${open.count === 1 ? '' : 's'} (${open.stake} golden footballs) will be refunded unless this lineup plays again today.`);
     if (current.liveStartedAt || current.liveId) lines.push('It is currently live.');
     const ok = await showConfirm(lines.join('\n'), { confirmLabel: 'Replace', cancelLabel: 'Keep shared match', type: 'warning' });
     if (!ok) { declined = pair; return false; }
