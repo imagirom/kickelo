@@ -2448,3 +2448,16 @@ body.paused > *:not(#pauseOverlay) {
 .bet-chip { flex: 0 0 auto; width: auto; padding: 6px 12px; }
 .bet-sheet-stake { flex: 1; min-width: 0; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--input-border-color); background: var(--gray-dark); color: var(--text-color-primary); }
 .bet-sheet-info { font-size: 0.9em; color: var(--text-color-secondary); font-variant-numeric: tabular-nums; }
+.bets-challenge-btn { padding: 8px 12px; border-radius: 5px; font-size: 0.95em; }
+.bets-feed-actions { margin-left: auto; display: inline-flex; gap: 6px; }
+.bets-feed-btn { width: auto; padding: 4px 10px; border-radius: 5px; font-size: 0.9em; }
+.bets-feed-btn.bets-accept { border: 1px solid #f2c230; }
+.bets-feed-btn.bets-withdraw { background: transparent; box-shadow: none; color: var(--text-color-secondary); padding: 4px 6px; }
+.bet-sheet-field { display: flex; align-items: center; gap: 8px; }
+.bet-sheet-field[hidden] { display: none; }
+.bet-sheet-field-label { flex: 0 0 6.5em; font-size: 0.9em; color: var(--text-color-secondary); }
+.bet-sheet-field > select, .bet-sheet-field > input { flex: 1; min-width: 0; max-width: none; }
+.bet-sheet-chips .bet-sheet-field { flex: 1; min-width: 0; }
+.bet-sheet-chips .bet-sheet-field-label { flex-basis: auto; }
+.bet-chip.active { outline: 2px solid #f2c230; }
+.challenge-side .bet-chip { flex: 1; }

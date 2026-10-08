@@ -199,3 +199,53 @@ test('house props: at most count rows, a "No" bet shows on both feeds', async ({
   await ctxA.close();
   await ctxB.close();
 });
+
+test('challenges: one of two concurrent accepts wins, withdraw hides Accept', async ({ browser }) => {
+  const { ctx: ctxA, page: a } = await openPhone(browser);
+  const { ctx: ctxB, page: b } = await openPhone(browser);
+  const { ctx: ctxC, page: c } = await openPhone(browser);
+  const names = await playerNames(a);
+  await pickLineup(a, names.slice(0, 4));
+  await expect(b.locator('#betsBox')).toBeVisible({ timeout: 10000 });
+  await a.click('#toggleLiveMode');
+  await a.click('#btnRedScored');
+  await expect(b.locator('#betsBox')).toContainText('Closed at first goal');
+
+  // A challenges anyone after the first goal.
+  async function postChallenge(myStake) {
+    await a.locator('#betsBox .bets-challenge-btn').click();
+    const dlg = a.locator('.confirm-dialog');
+    await dlg.locator('select.challenge-challenger').selectOption(names[4]);
+    await dlg.locator('select.challenge-test').selectOption('goesToFourFour');
+    await dlg.locator('button', { hasText: 'I bet against' }).click();
+    await expect(dlg.locator('.challenge-preview')).toHaveText('Not: Goes to 4:4');
+    await dlg.locator('input.challenge-my-stake').fill(String(myStake));
+    await dlg.locator('input.challenge-their-stake').fill('30');
+    await a.locator('.confirm-btn-ok').click();
+  }
+  await postChallenge(10);
+  const line = (p, stake) => p.locator('#betsBox .bets-feed li', { hasText: `${stake} vs 30` });
+  await expect(line(b, 10)).toContainText(`${names[4]} → anyone`);
+  await expect(line(c, 10).locator('button', { hasText: 'Accept' })).toBeVisible();
+
+  // B and C accept at the same time.
+  for (const [p, who] of [[b, names[5]], [c, names[0]]]) {
+    await line(p, 10).locator('button', { hasText: 'Accept' }).click();
+    await p.locator('.confirm-dialog select.challenge-acceptor').selectOption(who);
+  }
+  await Promise.all([b.locator('.confirm-btn-ok').click(), c.locator('.confirm-btn-ok').click()]);
+  const toasts = async (p) => (await p.locator('.toast-message').allTextContents()).join('|');
+  await expect.poll(async () => `${await toasts(b)}#${await toasts(c)}`, { timeout: 10000 })
+    .toMatch(/Challenge accepted.*#.*Already taken by|Already taken by.*#.*Challenge accepted/);
+  for (const p of [a, b, c]) await expect(line(p, 10)).toContainText('accepted by');
+
+  // A second challenge is withdrawn; its Accept button disappears on B.
+  await postChallenge(7);
+  await expect(line(b, 7).locator('button', { hasText: 'Accept' })).toBeVisible();
+  await line(a, 7).locator('button', { hasText: 'Withdraw' }).click();
+  await expect(line(b, 7)).toHaveCount(0);
+
+  await ctxA.close();
+  await ctxB.close();
+  await ctxC.close();
+});

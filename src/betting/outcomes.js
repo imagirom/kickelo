@@ -62,7 +62,7 @@ export function evaluateOutcome(match, outcome) {
   return outcome.negate ? !r : r;
 }
 
-const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+export const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
 export function describeOutcome(outcome, labelOf) {
   const t = outcome.team ? labelOf(outcome.team) : '';
