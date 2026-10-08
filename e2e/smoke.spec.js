@@ -32,7 +32,7 @@ test('tournaments section exists', async ({ page }, testInfo) => {
   await signInViaUI(page);
 
   const suffix = testInfo.project.name;
-  const tournaments = page.locator('text=Tournaments');
+  const tournaments = page.locator('#tournamentsHeading');
   await expect(tournaments).toBeVisible();
   await tournaments.scrollIntoViewIfNeeded();
   await page.screenshot({ path: path.join(SCREENSHOT_DIR, `tournaments-${suffix}.png`), fullPage: false });

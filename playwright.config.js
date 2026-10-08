@@ -30,6 +30,14 @@ export default defineConfig({
       timeout: 30000,
     },
     {
+      // The emulator opens firestore (7070) before auth (9099); this idle process just
+      // makes Playwright also wait for the auth port, which the emulator above opens.
+      command: 'node -e "setInterval(() => {}, 1 << 30)"',
+      port: 9099,
+      reuseExistingServer: true,
+      timeout: 60000,
+    },
+    {
       command: 'npx vite --port 5173',
       port: 5173,
       reuseExistingServer: true,

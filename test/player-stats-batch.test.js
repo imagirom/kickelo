@@ -9,7 +9,10 @@ const MAX_GOALS = 5;
  * Create test matches to validate the function
  */
 function createTestMatches() {
-    const now = Date.now();
+    // Local noon today: "now - 2h" must still be today, whatever time the test runs.
+    const noon = new Date();
+    noon.setHours(12, 0, 0, 0);
+    const now = noon.getTime();
     const oneHour = 60 * 60 * 1000;
     const oneDay = 24 * oneHour;
     
