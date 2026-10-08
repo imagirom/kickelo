@@ -3,7 +3,7 @@
 import { BETTING, houseBetsActive } from '../src/betting/betting-config.js';
 import { matchupKey, isFullLineup, sameTeam } from '../src/betting/matchup.js';
 import { goalProbability, scorelineDistribution, winProbability, toOdds, logLikelihood, pathDistribution, outcomeProbability, normalCdf } from '../src/betting/model.js';
-import { dayKey, firstGoalAt, resolveHouseBet, computeBalances, checkBet } from '../src/betting/ledger.js';
+import { dayKey, firstGoalAt, resolveHouseBet, resolveChallenge, computeBalances, checkBet } from '../src/betting/ledger.js';
 import { shouldClearAfterSubmit, buildOffer, shouldPublishLineup, needsOverwriteConfirm, goalUpdate, isLiveTakeover, ownsLive, showNotSharedHint, liveClaimUpdate } from '../src/betting/current-match.js';
 import params from '../src/betting/model-params.json' with { type: 'json' };
 import { OUTCOME_TESTS, evaluateOutcome, describeOutcome } from '../src/betting/outcomes.js';
@@ -328,6 +328,35 @@ console.log('\n=== candidateProps minSamples gate ===');
   assertEq(few.has('marginAtLeast'), true, 'scoreline props kept');
   assertEq(tests({ ...P, samples: { scoreline: 10, goalLog: 10 } }).size, 0, 'few matches -> no props');
   assertEq(candidateProps(red, blue, 0, P).some((c) => c.outcome.test === 'durationOver'), true, 'default opts: no gate');
+}
+
+console.log('\n=== challenges in the ledger ===');
+{
+  const day = new Date(2026, 9, 8, 12).getTime();
+  const R = ['Manuel', 'Marc']; const B = ['Roman', 'Tobi'];
+  const key = 'Manuel::Marc|Roman::Tobi';
+  const m = { id: 'c1', timestamp: day + 600000, teamA: R, teamB: B, winner: 'A', goalsA: 5, goalsB: 1, matchDuration: 240000, goalLog: [{ team: 'red', timestamp: 1 }] };
+  const ch = (extra = {}) => ({ kind: 'challenge', matchupKey: key, placedAt: day, challenger: 'Simon', challengerStake: 10,
+    opponent: null, opponentStake: 30, outcome: { test: 'marginAtLeast', team: R, threshold: 3 }, acceptedBy: null, acceptedAt: null, void: false, ...extra });
+  const acc = { acceptedBy: 'Peter', acceptedAt: day + 400000 };
+
+  assertEq(resolveChallenge(ch(), [], day + 1000).status, 'open', 'unaccepted, no match -> open');
+  assertEq(resolveChallenge(ch(), [m], day + 700000).status, 'cancelled', 'unaccepted when match logged -> cancelled');
+  assertEq(resolveChallenge(ch(acc), [], day + 500000).status, 'pending', 'accepted, no match yet -> pending');
+  assertEq(resolveChallenge(ch(acc), [m], day + 700000), { status: 'won', matchId: 'c1', challengerPayout: 40, acceptorPayout: 0 }, 'challenger right -> takes both stakes');
+  assertEq(resolveChallenge(ch({ ...acc, outcome: { test: 'marginAtLeast', team: B, threshold: 3 } }), [m], day + 700000).acceptorPayout, 40, 'challenger wrong -> acceptor takes both');
+  assertEq(resolveChallenge(ch({ acceptedBy: 'Peter', acceptedAt: day + 650000 }), [m], day + 700000).status, 'cancelled', 'accepted after the match was logged -> cancelled');
+  assertEq(resolveChallenge(ch({ ...acc, outcome: { test: 'durationOver', team: null, threshold: 300 } }), [{ ...m, matchDuration: undefined }], day + 700000),
+    { status: 'refunded', matchId: 'c1', challengerPayout: 10, acceptorPayout: 30 }, 'undecidable outcome -> both refunded');
+  assertEq(resolveChallenge(ch(acc), [], day + 24 * 3600 * 1000).status, 'refunded', 'accepted, no match by day end -> refunded');
+
+  const bal = computeBalances([ch(acc)], [m], day + 700000);
+  assertEq(bal.get('Simon').balance, 100 - 10 + 40, 'challenger balance after a win');
+  assertEq(bal.get('Peter').balance, 100 - 30, 'acceptor balance after a loss (allowance counted)');
+  const open = computeBalances([ch()], [], day + 1000);
+  assertEq(open.get('Simon'), { balance: 90, todayDelta: -10, open: 1 }, 'open challenge holds the challenger stake');
+  assertEq(open.has('Peter'), false, 'no acceptor yet -> no wallet');
+  assertEq(computeBalances([ch({ void: true })], [], day + 1000).size, 0, 'withdrawn challenge ignored');
 }
 
 // --- further sections are appended by later tasks above this line ---

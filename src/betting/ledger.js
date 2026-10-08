@@ -17,20 +17,20 @@ export function firstGoalAt(match) {
   return match.timestamp - match.matchDuration + match.goalLog[0].timestamp;
 }
 
-function findMatch(bet, matches) {
-  const day = dayKey(bet.placedAt);
+function findMatch(matchupKeyOfBet, placedAt, matches) {
+  const day = dayKey(placedAt);
   let best = null;
   for (const m of matches) {
     if (m.deleted || typeof m.timestamp !== 'number') continue;
-    if (m.timestamp <= bet.placedAt || dayKey(m.timestamp) !== day) continue;
-    if (matchupKey(m.teamA, m.teamB) !== bet.matchupKey) continue;
+    if (m.timestamp <= placedAt || dayKey(m.timestamp) !== day) continue;
+    if (matchupKey(m.teamA, m.teamB) !== matchupKeyOfBet) continue;
     if (!best || m.timestamp < best.timestamp) best = m;
   }
   return best;
 }
 
 export function resolveHouseBet(bet, matches, now) {
-  const match = findMatch(bet, matches);
+  const match = findMatch(bet.matchupKey, bet.placedAt, matches);
   if (!match) {
     const dayOver = now >= dayKey(bet.placedAt) + 24 * 3600 * 1000;
     return dayOver
@@ -46,21 +46,53 @@ export function resolveHouseBet(bet, matches, now) {
     : { status: 'lost', matchId: match.id, payout: 0 };
 }
 
+export function resolveChallenge(bet, matches, now) {
+  const match = findMatch(bet.matchupKey, bet.placedAt, matches);
+  const accepted = Boolean(bet.acceptedBy) && typeof bet.acceptedAt === 'number';
+  const refundAll = (status, matchId) => ({ status, matchId,
+    challengerPayout: bet.challengerStake, acceptorPayout: accepted ? bet.opponentStake : 0 });
+  if (!match) {
+    const dayOver = now >= dayKey(bet.placedAt) + 24 * 3600 * 1000;
+    if (!dayOver) return { status: accepted ? 'pending' : 'open', matchId: null, challengerPayout: 0, acceptorPayout: 0 };
+    return refundAll(accepted ? 'refunded' : 'cancelled', null);
+  }
+  if (!accepted || bet.acceptedAt >= match.timestamp) return refundAll('cancelled', match.id);
+  const result = evaluateOutcome(match, bet.outcome);
+  if (result === null) return refundAll('refunded', match.id);
+  const pot = bet.challengerStake + bet.opponentStake;
+  return result
+    ? { status: 'won', matchId: match.id, challengerPayout: pot, acceptorPayout: 0 }
+    : { status: 'lost', matchId: match.id, challengerPayout: 0, acceptorPayout: pot };
+}
+
+function book(wallets, days, player, ms, stake, payout, isOpen, today) {
+  const w = wallets.get(player) || { balance: 0, todayDelta: 0, open: 0 };
+  if (!days.has(player)) days.set(player, new Set());
+  days.get(player).add(dayKey(ms));
+  const net = payout - stake;
+  w.balance += net;
+  if (isOpen) w.open++;
+  if (dayKey(ms) === today) w.todayDelta += net;
+  wallets.set(player, w);
+}
+
 export function computeBalances(bets, matches, now, cfg = BETTING) {
   const wallets = new Map();
   const days = new Map();
   const today = dayKey(now);
   for (const bet of bets) {
-    if (bet.void || bet.kind !== 'house') continue;
-    const w = wallets.get(bet.bettor) || { balance: 0, todayDelta: 0, open: 0 };
-    if (!days.has(bet.bettor)) days.set(bet.bettor, new Set());
-    days.get(bet.bettor).add(dayKey(bet.placedAt));
-    const r = resolveHouseBet(bet, matches, now);
-    const net = r.payout - bet.stake;
-    w.balance += net;
-    if (r.status === 'open') w.open++;
-    if (dayKey(bet.placedAt) === today) w.todayDelta += net;
-    wallets.set(bet.bettor, w);
+    if (bet.void) continue;
+    if (bet.kind === 'house') {
+      const r = resolveHouseBet(bet, matches, now);
+      book(wallets, days, bet.bettor, bet.placedAt, bet.stake, r.payout, r.status === 'open', today);
+    } else if (bet.kind === 'challenge') {
+      const r = resolveChallenge(bet, matches, now);
+      const isOpen = r.status === 'open' || r.status === 'pending';
+      book(wallets, days, bet.challenger, bet.placedAt, bet.challengerStake, r.challengerPayout, isOpen, today);
+      if (bet.acceptedBy && typeof bet.acceptedAt === 'number') {
+        book(wallets, days, bet.acceptedBy, bet.acceptedAt, bet.opponentStake, r.acceptorPayout, isOpen, today);
+      }
+    }
   }
   for (const [player, w] of wallets) w.balance += cfg.dailyAllowance * days.get(player).size;
   return wallets;
