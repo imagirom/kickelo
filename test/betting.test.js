@@ -2,7 +2,7 @@
 // Betting: pure-logic tests (no browser, no Firestore).
 import { BETTING, houseBetsActive } from '../src/betting/betting-config.js';
 import { matchupKey, isFullLineup, sameTeam } from '../src/betting/matchup.js';
-import { goalProbability, scorelineDistribution, winProbability, toOdds, logLikelihood } from '../src/betting/model.js';
+import { goalProbability, scorelineDistribution, winProbability, toOdds, logLikelihood, pathDistribution, outcomeProbability, normalCdf } from '../src/betting/model.js';
 import { dayKey, firstGoalAt, resolveHouseBet, computeBalances, checkBet } from '../src/betting/ledger.js';
 import { shouldClearAfterSubmit, buildOffer, shouldPublishLineup, needsOverwriteConfirm, goalUpdate, isLiveTakeover, ownsLive, showNotSharedHint, liveClaimUpdate } from '../src/betting/current-match.js';
 import params from '../src/betting/model-params.json' with { type: 'json' };
@@ -245,6 +245,30 @@ console.log('\n=== outcome tests ===');
   assertEq(describeOutcome(o('marginAtLeast', { team: R, threshold: 3 }), lab), 'MaMa win by 3+', 'describe margin');
   assertEq(describeOutcome(o('durationOver', { threshold: 270 }), lab), 'Over 4:30', 'describe duration');
   assertEq(describeOutcome(o('goesToFourFour', { negate: true }), lab), 'Not: Goes to 4:4', 'describe negation');
+}
+
+console.log('\n=== path enumeration ===');
+{
+  const P = { s: 1115, c: 0, kappa: 43 };
+  const paths = pathDistribution(120, P);
+  assertEq(paths.length, 252, 'race to 5 has 2*C(9,4)=252 complete sequences');
+  assertClose(paths.reduce((s, x) => s + x.p, 0), 1, 1e-9, 'sequence probabilities sum to 1');
+  const team = ['A', 'B'];
+  assertClose(outcomeProbability({ test: 'winner', team }, 120, P), winProbability(120, P), 1e-9, 'enumeration agrees with closed-form winner');
+  const d = scorelineDistribution(120, P);
+  assertClose(outcomeProbability({ test: 'shutout', team }, 120, P), d.win[0], 1e-9, 'shutout = P(5:0)');
+  assertClose(outcomeProbability({ test: 'goesToFourFour', team: null }, 120, P), d.win[4] + d.lose[4], 1e-9, '4:4 = P(5:4)+P(4:5)');
+  const yes = outcomeProbability({ test: 'marginAtLeast', team, threshold: 3 }, 120, P);
+  const no = outcomeProbability({ test: 'marginAtLeast', team, threshold: 3, negate: true }, 120, P);
+  assertClose(yes + no, 1, 1e-9, 'yes + no = 1');
+  const first = outcomeProbability({ test: 'scoresFirst', team }, 0, { ...P, kappa: Infinity });
+  assertClose(first, 0.5, 1e-9, 'scores first at gap 0, binomial = 0.5');
+  assertEq(outcomeProbability({ test: 'comebackAtLeast', team, threshold: 1 }, 0, P) > 0, true, 'comeback probability positive');
+  assertClose(normalCdf(0), 0.5, 1e-7, 'Phi(0)');
+  assertClose(normalCdf(1.96), 0.975, 1e-3, 'Phi(1.96)');
+  const PD = { ...P, duration: { a: Math.log(260), b: 0, sigma: 0.3 } };
+  assertClose(outcomeProbability({ test: 'durationOver', team: null, threshold: 260 }, 0, PD), 0.5, 1e-6, 'duration median -> 0.5');
+  assertEq(outcomeProbability({ test: 'durationOver', team: null, threshold: 260 }, 0, P), null, 'no duration model -> null');
 }
 
 // --- further sections are appended by later tasks above this line ---

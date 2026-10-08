@@ -4,6 +4,7 @@
 // kappa = Infinity is the plain binomial (goals independent).
 import { MAX_GOALS } from '../constants.js';
 import { BETTING } from './betting-config.js';
+import { evaluateOutcome } from './outcomes.js';
 
 const N = MAX_GOALS; // race to 5
 
@@ -68,4 +69,57 @@ export function logLikelihood(matches, params) {
     ll += Math.log(Math.max(p, 1e-300));
   }
   return ll;
+}
+
+// Exact enumeration of race-to-5 goal sequences. The beta-binomial is exchangeable:
+// a sequence's probability depends only on its final counts (a for, b against).
+export function pathDistribution(gap, params) {
+  const mu = goalProbability(gap, params);
+  const finite = Number.isFinite(params.kappa);
+  const alpha = mu * params.kappa;
+  const beta = (1 - mu) * params.kappa;
+  const lb = finite ? logBeta(alpha, beta) : 0;
+  const prob = (a, b) => (finite
+    ? Math.exp(logBeta(alpha + a, beta + b) - lb)
+    : Math.pow(mu, a) * Math.pow(1 - mu, b));
+  const out = [];
+  (function walk(seq, a, b) {
+    if (a === N || b === N) { out.push({ seq, p: prob(a, b) }); return; }
+    walk(seq + 'f', a + 1, b);
+    walk(seq + 'a', a, b + 1);
+  })('', 0, 0);
+  return out;
+}
+
+export function normalCdf(z) {
+  const t = 1 / (1 + 0.3275911 * Math.abs(z) / Math.SQRT2);
+  const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t
+    * Math.exp(-(z * z) / 2);
+  return z >= 0 ? 0.5 * (1 + y) : 0.5 * (1 - y);
+}
+
+const US = ['f1', 'f2'];
+const THEM = ['a1', 'a2'];
+
+/** P(outcome) for "our" team (US) with ELO advantage `gap`; team-less tests: gap = red - blue, US = red. */
+export function outcomeProbability(outcome, gap, params) {
+  if (outcome.test === 'durationOver') {
+    const d = params.duration;
+    if (!d) return null;
+    const pOver = 1 - normalCdf((Math.log(outcome.threshold) - (d.a + d.b * Math.abs(gap))) / d.sigma);
+    return outcome.negate ? 1 - pOver : pOver;
+  }
+  const o = { ...outcome, team: outcome.team ? US : null };
+  let p = 0;
+  for (const { seq, p: w } of pathDistribution(gap, params)) {
+    const goalsA = [...seq].filter((c) => c === 'f').length;
+    const match = {
+      teamA: US, teamB: THEM, goalsA, goalsB: seq.length - goalsA,
+      winner: goalsA === N ? 'A' : 'B',
+      goalLog: [...seq].map((c, i) => ({ team: c === 'f' ? 'red' : 'blue', timestamp: i })),
+      matchDuration: 1,
+    };
+    if (evaluateOutcome(match, o)) p += w;
+  }
+  return p;
 }
