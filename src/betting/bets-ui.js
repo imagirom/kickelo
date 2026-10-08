@@ -271,6 +271,13 @@ function amounts(node, pairs) {
   pairs.forEach(([text, n], i) => node.append(i ? ` · ${text} ` : `${text} `, footballs(n)));
 }
 
+/** Disable the sheet's confirm button while someone can't cover their stake, and say who. */
+function guardBalance(sheet, info, short) {
+  const okBtn = sheet.closest('.confirm-dialog')?.querySelector('.confirm-btn-ok');
+  if (okBtn) okBtn.disabled = short.length > 0;
+  if (short.length) info.appendChild(el('div', 'bet-sheet-short', `Not enough golden footballs: ${short.join(', ')}`));
+}
+
 async function openChallengeForm(cm) {
   const sheet = el('div', 'bet-sheet');
   sheet.appendChild(el('div', 'bet-sheet-title', 'Challenge'));
@@ -347,6 +354,8 @@ async function openChallengeForm(cm) {
     lockNote.textContent = opponent ? `Locks in straight away for ${opponent} — no accept needed.` : 'Open until someone accepts.';
     const okBtn = sheet.closest('.confirm-dialog')?.querySelector('.confirm-btn-ok');
     if (okBtn) okBtn.textContent = opponent ? 'Lock in' : 'Post challenge';
+    guardBalance(sheet, info, [[challengerSelect.value, mine], [opponent, theirs]]
+      .filter(([who, n]) => who && n > available(who)).map(([who]) => who));
   }
   challengerSelect.addEventListener('change', () => { fillOpponents(); update(); });
   opponentSelect.addEventListener('change', update);
@@ -406,11 +415,14 @@ async function openAcceptSheet(bet) {
   const update = () => {
     const balance = acceptorSelect.value ? available(acceptorSelect.value) : 0;
     amounts(info, [['Your stake', bet.opponentStake], ['win', bet.challengerStake + bet.opponentStake], ['Balance:', balance]]);
+    guardBalance(sheet, info, acceptorSelect.value && bet.opponentStake > balance ? [acceptorSelect.value] : []);
   };
   acceptorSelect.addEventListener('change', update);
   update();
   sheet.append(field('Who accepts', acceptorSelect), info);
-  const ok = await showConfirm('', { contentElement: sheet, confirmLabel: 'Accept', cancelLabel: 'Cancel' });
+  const pending = showConfirm('', { contentElement: sheet, confirmLabel: 'Accept', cancelLabel: 'Cancel' });
+  update(); // the dialog exists now: guard its confirm button
+  const ok = await pending;
   if (!ok) return;
   const acceptor = acceptorSelect.value;
   if (!acceptor) { showToast('Pick who accepts', 'warning'); return; }
@@ -463,13 +475,16 @@ async function openBetSheet({ outcome, odds, title, matchupKey: key }) {
     }
     const balance = bettorSelect.value ? available(bettorSelect.value) : 0;
     amounts(info, [['Payout:', Math.round(stake * odds)], ['Balance:', balance]]);
+    guardBalance(sheet, info, bettorSelect.value && stake > balance ? [bettorSelect.value] : []);
   }
   stakeInput.addEventListener('input', update);
   bettorSelect.addEventListener('change', update);
   update();
 
   sheet.append(field('Bettor', bettorSelect), chips, info);
-  const ok = await showConfirm('', { contentElement: sheet, confirmLabel: 'Place bet', cancelLabel: 'Cancel' });
+  const pending = showConfirm('', { contentElement: sheet, confirmLabel: 'Place bet', cancelLabel: 'Cancel' });
+  update(); // the dialog exists now: guard its confirm button
+  const ok = await pending;
   if (!ok) return;
 
   const bettor = bettorSelect.value;

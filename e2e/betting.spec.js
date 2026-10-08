@@ -317,12 +317,13 @@ test('a challenge to a named player locks in straight away; oversized stakes say
     await dlg.locator('input.challenge-their-stake').fill(String(theirs));
     return dlg;
   };
-  // opponent can't cover the stake -> named, readable message (not "closed")
+  // opponent can't cover the stake -> confirm disabled, says who
   let dlg = await open(names[5], 5000);
   await expect(dlg.locator('.confirm-btn-ok')).toHaveText('Lock in');
   await expect(dlg).toContainText('Locks in straight away');
-  await dlg.locator('.confirm-btn-ok').click();
-  await expect(a.locator('.toast-message', { hasText: `${names[5]} doesn't have enough golden footballs` })).toBeVisible();
+  await expect(dlg.locator('.confirm-btn-ok')).toBeDisabled();
+  await expect(dlg).toContainText(`Not enough golden footballs: ${names[5]}`);
+  await dlg.locator('.confirm-btn-cancel').click();
   // over the stake cap -> cap message
   await expect(a.locator('.confirm-dialog')).toHaveCount(0);
   dlg = await open('', 20000);

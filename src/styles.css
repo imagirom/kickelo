@@ -2488,3 +2488,5 @@ body.paused > *:not(#pauseOverlay) {
 .challenge-stakes .bet-sheet-stake { flex: 1; min-width: 0; }
 .challenge-vs { color: var(--text-color-secondary); font-size: 0.9em; }
 .challenge-lock-note { font-style: italic; }
+.confirm-btn-ok:disabled { opacity: 0.5; cursor: default; }
+.bet-sheet-short { color: var(--accent-red); }
