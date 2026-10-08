@@ -8,9 +8,10 @@ export function formatMsToMMSS(ms) {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
-// Create SVG timeline for a match's goalLog, with dynamic width and fixed height
-export function createTimelineSVG(goalLog, width = 400) {
-    if (!Array.isArray(goalLog) || goalLog.length === 0) return null;
+// Create SVG timeline for a match's goalLog, with dynamic width and fixed height.
+// totalTime: length of the line (defaults to the last goal; a running match passes its elapsed time).
+export function createTimelineSVG(goalLog, width = 400, totalTime = goalLog?.[goalLog.length - 1]?.timestamp || 0) {
+    if (!Array.isArray(goalLog)) return null;
     const height = 32;
     const margin = 18;
     const lineY = height / 2;
@@ -19,7 +20,6 @@ export function createTimelineSVG(goalLog, width = 400) {
     const markersHeight = 8; // Height of minute markers above the line
     const lineStart = margin;
     const lineEnd = width - margin;
-    const totalTime = goalLog[goalLog.length - 1].timestamp || 0;
     if (totalTime <= 0) return null;
     // Minute markers
     const minuteMarkers = [];

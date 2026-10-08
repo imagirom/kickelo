@@ -50,13 +50,18 @@ function renderLive(cm) {
   timer.dataset.startedMs = String(startedMs);
   top.append(el('span', 'bets-live-dot', '● LIVE'), timer, el('span', 'bets-live-score', `${red} : ${goals.length - red}`));
   row.appendChild(top);
-  const svg = createTimelineSVG(goals);
-  if (svg) {
-    const tl = el('div', 'bets-timeline');
-    tl.innerHTML = svg; // generated markup: numbers and fixed strings only
-    row.appendChild(tl);
-  }
+  const tl = el('div', 'bets-timeline');
+  tl.goals = goals;
+  drawTimeline(tl, Date.now() - startedMs);
+  row.appendChild(tl);
   return row;
+}
+
+/** The line runs to the current game time, so it grows every second. */
+function drawTimeline(tl, elapsedMs) {
+  // goals after the clock (a peer's clock running ahead) still fit on the line
+  const total = Math.max(elapsedMs, ...tl.goals.map((g) => g.timestamp || 0));
+  tl.innerHTML = createTimelineSVG(tl.goals, 400, total) ?? ''; // generated markup: numbers and fixed strings only
 }
 
 const fmtOdds = (odds) => `${odds}×`;
@@ -510,7 +515,11 @@ async function openBetSheet({ outcome, odds, title, matchupKey: key }) {
 
 function tickTimer() {
   const timer = document.querySelector('#betsContent .live-timer');
-  if (timer) timer.textContent = formatMsToMMSS(Date.now() - Number(timer.dataset.startedMs));
+  if (!timer) return;
+  const elapsed = Date.now() - Number(timer.dataset.startedMs);
+  timer.textContent = formatMsToMMSS(elapsed);
+  const tl = document.querySelector('#betsContent .bets-timeline');
+  if (tl) drawTimeline(tl, elapsed);
 }
 
 function render() {
@@ -527,7 +536,7 @@ function render() {
     return;
   }
   content.replaceChildren(...[renderHeader(cm), renderLive(cm), renderHouse(cm), renderChallengeButton(cm), ...renderFeed(cm)].filter(Boolean));
-  // Only the timer text ticks; rebuilding buttons every second would eat taps.
+  // Only the timer and timeline tick; rebuilding buttons every second would eat taps.
   const live = Boolean(content.querySelector('.live-timer'));
   if (live && !timerId) timerId = setInterval(tickTimer, 1000);
   if (!live && timerId) { clearInterval(timerId); timerId = null; }
