@@ -10,7 +10,7 @@ export const OUTCOME_TESTS = [
   { id: 'marginAtLeast', needsGoalLog: false, hasTeam: true, thresholds: [2, 3, 4] },
   { id: 'shutout', needsGoalLog: false, hasTeam: true, thresholds: null },
   { id: 'goesToFourFour', needsGoalLog: false, hasTeam: false, thresholds: null },
-  { id: 'durationOver', needsGoalLog: true, hasTeam: false, thresholds: [180, 210, 240, 270, 300, 330, 360] }, // last goal's time
+  { id: 'durationOver', needsGoalLog: true, hasTeam: false, thresholds: [240, 270, 300, 330, 360] }, // last goal's time
   { id: 'scoresFirst', needsGoalLog: true, hasTeam: true, thresholds: null },
   { id: 'firstScorerWins', needsGoalLog: true, hasTeam: false, thresholds: null },
   { id: 'comebackAtLeast', needsGoalLog: true, hasTeam: true, thresholds: [1, 2] },

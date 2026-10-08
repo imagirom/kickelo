@@ -117,20 +117,25 @@ function marginTable(params, data) {
 // --- Props: duration model, per-prop backtest, exclusion ---
 const isLive = (r) => Array.isArray(r.match.goalLog) && r.match.goalLog.length > 0 && typeof r.match.matchDuration === 'number';
 
-// ln(seconds) = a + b*|gap| + eps, OLS on live matches with 30 s < duration < 30 min.
+// Weibull time-to-last-goal with scale lambda*exp(b*|gap|), MLE on live matches with
+// 30 s < duration < 30 min. Weibull beat log-normal, log-logistic and the empirical train
+// distribution on the time-split backtest (log-normal overstated very short games).
 // Duration = time of the last goal (what durationOver resolves on), not matchDuration, which
 // keeps running until Submit is pressed.
 function fitDuration(data) {
   const pts = data.filter(isLive).map((r) => [Math.abs(r.gap), decidedAtMs(r.match) / 1000])
-    .filter(([, sec]) => sec > 30 && sec < 1800).map(([x, sec]) => [x, Math.log(sec)]);
-  const n = pts.length;
-  const mx = pts.reduce((s, [x]) => s + x, 0) / n;
-  const my = pts.reduce((s, [, y]) => s + y, 0) / n;
-  const sxx = pts.reduce((s, [x]) => s + (x - mx) ** 2, 0);
-  const b = pts.reduce((s, [x, y]) => s + (x - mx) * (y - my), 0) / sxx;
-  const a = my - b * mx;
-  const sigma = Math.sqrt(pts.reduce((s, [x, y]) => s + (y - a - b * x) ** 2, 0) / (n - 2));
-  return { a, b, sigma, n };
+    .filter(([, sec]) => sec > 30 && sec < 1800);
+  const nll = ([ll, lk, b]) => {
+    const k = Math.exp(lk);
+    let s = 0;
+    for (const [x, t] of pts) {
+      const lam = Math.exp(ll + b * x);
+      s -= Math.log(k / lam) + (k - 1) * Math.log(t / lam) - Math.pow(t / lam, k);
+    }
+    return s;
+  };
+  const [ll, lk, b] = nelderMead(nll, [Math.log(300), Math.log(2.5), 0], [0.1, 0.1, 0.0002], 600).x;
+  return { lambda: Math.exp(ll), k: Math.exp(lk), b, n: pts.length };
 }
 const durationTrain = fitDuration(train);
 const durationAll = fitDuration(usable);
@@ -223,11 +228,11 @@ Note: the client prices with season-cache ELO; at a season start gaps are small 
 
 Samples: scoreline ${out.samples.scoreline}, goal log ${out.samples.goalLog}.
 
-### Duration to the last goal (ln seconds = a + b·|gap| + ε; live matches 30 s – 30 min)
-| fit | a | b | sigma | n | median at gap 0 |
+### Duration to the last goal (Weibull, scale = lambda·exp(b·|gap|); live matches 30 s – 30 min)
+| fit | lambda | k | b | n | median at gap 0 |
 |---|---|---|---|---|---|
-| shipped (all) | ${durationAll.a.toFixed(4)} | ${durationAll.b.toExponential(3)} | ${durationAll.sigma.toFixed(4)} | ${durationAll.n} | ${Math.round(Math.exp(durationAll.a))} s |
-| train | ${durationTrain.a.toFixed(4)} | ${durationTrain.b.toExponential(3)} | ${durationTrain.sigma.toFixed(4)} | ${durationTrain.n} | ${Math.round(Math.exp(durationTrain.a))} s |
+| shipped (all) | ${durationAll.lambda.toFixed(1)} | ${durationAll.k.toFixed(3)} | ${durationAll.b.toExponential(3)} | ${durationAll.n} | ${Math.round(durationAll.lambda * Math.pow(Math.LN2, 1 / durationAll.k))} s |
+| train | ${durationTrain.lambda.toFixed(1)} | ${durationTrain.k.toFixed(3)} | ${durationTrain.b.toExponential(3)} | ${durationTrain.n} | ${Math.round(durationTrain.lambda * Math.pow(Math.LN2, 1 / durationTrain.k))} s |
 
 ### Per-prop backtest (fit on train, evaluated on test; both team sides pooled)
 | family | n | mean p | observed | Brier model | Brier base rate | Brier logistic |

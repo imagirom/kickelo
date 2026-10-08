@@ -271,14 +271,17 @@ console.log('\n=== path enumeration ===');
   assertEq(outcomeProbability({ test: 'comebackAtLeast', team, threshold: 1 }, 0, P) > 0, true, 'comeback probability positive');
   assertClose(normalCdf(0), 0.5, 1e-7, 'Phi(0)');
   assertClose(normalCdf(1.96), 0.975, 1e-3, 'Phi(1.96)');
-  const PD = { ...P, duration: { a: Math.log(260), b: 0, sigma: 0.3 } };
-  assertClose(outcomeProbability({ test: 'durationOver', team: null, threshold: 260 }, 0, PD), 0.5, 1e-6, 'duration median -> 0.5');
+  const PD = { ...P, duration: { lambda: 300, k: 2.5, b: 0 } };
+  assertClose(outcomeProbability({ test: 'durationOver', team: null, threshold: 300 * Math.pow(Math.LN2, 1 / 2.5) }, 0, PD), 0.5, 1e-9, 'Weibull median -> 0.5');
+  assertClose(outcomeProbability({ test: 'durationOver', team: null, threshold: 300 }, 0, PD), Math.exp(-1), 1e-9, 'P(over lambda) = 1/e');
+  const PDb = { ...P, duration: { lambda: 300, k: 2.5, b: -0.0003 } };
+  assertEq(outcomeProbability({ test: 'durationOver', team: null, threshold: 300 }, 200, PDb) < outcomeProbability({ test: 'durationOver', team: null, threshold: 300 }, 0, PDb), true, 'b<0: lopsided matches are shorter');
   assertEq(outcomeProbability({ test: 'durationOver', team: null, threshold: 260 }, 0, P), null, 'no duration model -> null');
 }
 
 console.log('\n=== props ===');
 {
-  const P = { s: 1115, c: 0.01, kappa: 43, duration: { a: Math.log(258), b: 0.0002, sigma: 0.35 } };
+  const P = { s: 1115, c: 0.01, kappa: 43, duration: { lambda: 296, k: 2.5, b: -0.0002 } };
   const red = ['A', 'B']; const blue = ['C', 'D'];
   const cands = candidateProps(red, blue, 80, P);
   assertEq(cands.some((c) => c.outcome.test === 'winner'), false, 'winner is not a prop');
@@ -323,7 +326,7 @@ console.log('\n=== prop bets in the ledger ===');
 
 console.log('\n=== candidateProps minSamples gate ===');
 {
-  const P = { ...params, duration: { a: 5.5, b: 0, sigma: 0.35, n: 100 } };
+  const P = { ...params, duration: { lambda: 296, k: 2.5, b: 0, n: 100 } };
   const red = ['A', 'B']; const blue = ['C', 'D'];
   const tests = (ps) => new Set(candidateProps(red, blue, 0, ps, { minSamples: 30 }).map((c) => c.outcome.test));
   assertEq(tests({ ...P, samples: { scoreline: 100, goalLog: 100 } }).has('durationOver'), true, 'enough samples -> goal-log props');

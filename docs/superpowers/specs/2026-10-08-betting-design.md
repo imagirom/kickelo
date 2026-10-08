@@ -218,8 +218,11 @@ favourite wins 0.681/0.693, margin ≥ 3 0.516/0.564, 5:4 0.234/0.214,
 5:0 0.092/0.108. The remaining gap (lopsided results more frequent than
 predicted) is what `κ` captures.
 
-**Duration model.** `log(duration) ~ Normal(α + β·|g| + γ·E[goals], σ)`, fitted by least
-squares on live-mode matches; `P(durationOver T)` is a normal tail.
+**Duration model.** Time of the last goal ~ Weibull(shape k, scale λ·exp(b·|g|)), fitted by
+maximum likelihood on live-mode matches; `P(durationOver T) = exp(−(T/scale)^k)`. Chosen over
+log-normal, log-logistic and the empirical distribution on the time-split backtest (log-normal
+overstated very short games). Offered lines are 4:00–6:00 in 30 s steps: 3:00 and 3:30 stayed
+about 8 points off in the recent period (fewer very quick games lately) even with the best model.
 
 **Benchmark.** Per-prop logistic regression (features: gap, |gap|, average
 ELO, recent form) as a baseline. A prop switches to the benchmark only if it
@@ -240,7 +243,7 @@ model probability of the backed outcome. Pre-match ELO for a live bet comes
 from the client's current stats (the same trajectories the leaderboard uses).
 
 **Prop selection.** Candidates are all tests × sides × thresholds (margins
-k = 2..4, duration in 30 s steps) whose probability lies in
+k = 2..4, duration 4:00–6:00 in 30 s steps) whose probability lies in
 `[1/(1+maxRatio), maxRatio/(1+maxRatio)]` and have ≥ `minSamples` relevant
 historical matches. `count` of them are drawn with a PRNG seeded by
 `matchupKey + local date`, so every phone shows the same props. At most one

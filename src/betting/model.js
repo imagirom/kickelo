@@ -106,7 +106,9 @@ export function outcomeProbability(outcome, gap, params) {
   if (outcome.test === 'durationOver') {
     const d = params.duration;
     if (!d) return null;
-    const pOver = 1 - normalCdf((Math.log(outcome.threshold) - (d.a + d.b * Math.abs(gap))) / d.sigma);
+    // Weibull time-to-last-goal, scale shrinking with |gap| (lopsided games end sooner).
+    const scale = d.lambda * Math.exp(d.b * Math.abs(gap));
+    const pOver = Math.exp(-Math.pow(outcome.threshold / scale, d.k));
     return outcome.negate ? 1 - pOver : pOver;
   }
   const o = { ...outcome, team: outcome.team ? US : null };
