@@ -66,6 +66,14 @@ export function liveClaimUpdate(current, key, goalLog) {
 
 /** "Your lineup isn't shared": a full local lineup the shared doc does not carry,
  *  or live mode here on a shared matchup another phone scores (declined takeover). */
+/** The question starting live mode here needs before it may start: 'takeover' of another phone's live
+ *  match on this matchup, 'replace' of a different shared match that is live or has open bets, or null. */
+export function liveStartQuestion(current, localKey, openBets, liveId = null) {
+  if (!localKey) return null;
+  if (isLiveTakeover(current, localKey)) return ownsLive(current, liveId) ? null : 'takeover';
+  return needsOverwriteConfirm(current, localKey, openBets) ? 'replace' : null;
+}
+
 export function showNotSharedHint(current, localKey, { live = false, liveId = null } = {}) {
   if (!localKey) return false;
   if (current?.matchupKey !== localKey) return true;

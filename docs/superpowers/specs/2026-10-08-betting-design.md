@@ -290,8 +290,9 @@ from the offer.
 `meta/currentMatch` that changes the pairs (player selection, Suggest, tournament prefill), while the current match is live or has ≥ 1 non-void bet,
 it asks via `showConfirm`:
 "Replace the current match *Marc + Manuel vs Roman + Tobi*? 3 bets (45 ⚽︎) will be refunded."
-Declining keeps the local form change but does not publish it; the device
-shows a small "not shared" hint. Position swaps and Red/Blue swaps never ask.
+Declining ("Keep shared match", "Keep other phone") cancels the action itself: a lineup
+change is reverted to the lineup before it, and live mode is not started (the question is
+asked before it starts). One table, one match. Position swaps and Red/Blue swaps never ask.
 Cancelling live mode never refunds bets: they carry over to the next match with the same lineup (usually the restart) and are refunded at day end otherwise, so cancel needs no extra confirmation.
 
 **Leaderboard.** One new `#sortBySelect` option, "Golden footballs", rendered

@@ -80,20 +80,22 @@ test('lineup, live score and house bets sync across phones', async ({ browser })
   await a.selectOption('#teamB1', names[0]);
   await expect(a.locator('.confirm-dialog')).toContainText('1 bet');
   await a.locator('.confirm-btn-cancel').click();
+  // "Keep shared match" undoes the change itself: blue defense is back to what it was.
+  await expect(a.locator('#teamB1')).toHaveValue(names[2]);
 
   // Leaderboard option exists.
   await b.selectOption('#sortBySelect', 'goldenFootballs');
   await expect(b.locator('#leaderboard')).toContainText(/\d/);
 
   // B starting live mode on the same, already-live matchup asks first (spec Concurrency #7);
-  // declining keeps A's live match: B's goals never reach the shared doc, betting stays closed.
+  // "Keep other phone" means B's live mode never starts and A's live match is untouched.
   await b.click('body');
   await pickLineup(b, names);
   await b.click('#toggleLiveMode');
   await expect(b.locator('.confirm-dialog')).toContainText('already live');
   await b.locator('.confirm-btn-cancel').click();
-  await b.click('#btnBlueScored');
-  await b.click('#btnBlueScored');
+  await expect(b.locator('#liveMatchPanel')).toBeHidden();
+  await expect(b.locator('#toggleLiveMode')).toBeVisible();
   await b.waitForTimeout(1000);
   const doc = await shared();
   expect(doc.goalLog.arrayValue.values).toHaveLength(1);
@@ -135,7 +137,7 @@ test('live mode started before the teams are set is shared once they are', async
   await ctxB.close();
 });
 
-test('a burst of lineup events asks once and a decline is remembered', async ({ browser }) => {
+test('a burst of lineup events asks once and a decline undoes the change', async ({ browser }) => {
   const { ctx, page: a } = await openPhone(browser);
   const names = await playerNames(a);
   await pickLineup(a, names.slice(0, 4));
@@ -151,16 +153,11 @@ test('a burst of lineup events asks once and a decline is remembered', async ({ 
   await a.locator('.confirm-btn-cancel').click();
   await a.waitForTimeout(800);
   await expect(a.locator('.confirm-dialog')).toHaveCount(0);
-  await expect(a.locator('#betsNotShared')).toBeVisible();
-
-  // Same lineup again: no new dialog.
-  await setLineupLikeSuggest(a, other);
-  await a.waitForTimeout(800);
-  await expect(a.locator('.confirm-dialog')).toHaveCount(0);
-
-  // Back to the shared lineup: the owner never sees the hint.
-  await setLineupLikeSuggest(a, names.slice(0, 4));
+  // The lineup is back to the shared one; the owner never sees the hint.
+  await expect(a.locator('#teamA2')).toHaveValue(names[1]);
+  await expect(a.locator('#teamB2')).toHaveValue(names[3]);
   await expect(a.locator('#betsNotShared')).toBeHidden();
+  expect((await shared()).matchupKey.stringValue).toContain(names[1]);
   await a.click('#btnRedScored');
   await expect.poll(async () => (await shared())?.goalLog?.arrayValue?.values?.length ?? 0).toBe(1);
   await expect(a.locator('#betsNotShared')).toBeHidden();
@@ -279,7 +276,7 @@ test('a phone that lost the shared match never writes its goals or end onto the 
   await ctxB.close();
 });
 
-test('after a declined takeover, this phone claims live scoring once the other phone ends', async ({ browser }) => {
+test('declining a takeover or a replace keeps live mode off on this phone', async ({ browser }) => {
   const { ctx: ctxA, page: a } = await openPhone(browser);
   const { ctx: ctxB, page: b } = await openPhone(browser);
   const names = await playerNames(a);
@@ -288,16 +285,21 @@ test('after a declined takeover, this phone claims live scoring once the other p
   await expect.poll(async () => (await shared())?.liveId?.stringValue ?? null, { timeout: 10000 }).toBeTruthy();
   const aLive = (await shared()).liveId.stringValue;
 
+  // Same matchup: takeover question; "Keep other phone" -> live mode never starts here.
   await pickLineup(b, names.slice(0, 4));
   await b.click('#toggleLiveMode');
   await expect(b.locator('.confirm-dialog')).toContainText('already live');
   await b.locator('.confirm-btn-cancel').click();
+  await expect(b.locator('.confirm-dialog')).toHaveCount(0); // let the answered dialog fade out
+  await expect(b.locator('#liveMatchPanel')).toBeHidden();
 
-  await a.click('#cancelLiveMode');
-  await expect.poll(async () => { const id = (await shared())?.liveId?.stringValue; return Boolean(id) && id !== aLive; },
-    { timeout: 10000 }).toBe(true);
-  await b.click('#btnBlueScored');
-  await expect.poll(async () => (await shared())?.goalLog?.arrayValue?.values?.length ?? 0).toBe(1);
+  // Different matchup: the lineup change itself asks and "Keep shared match" reverts it.
+  await b.selectOption('#teamB2', names[4]);
+  await expect(b.locator('.confirm-dialog')).toContainText('currently live');
+  await b.locator('.confirm-btn-cancel').click();
+  await expect(b.locator('#teamB2')).toHaveValue(names[3]);
+  await expect(b.locator('#liveMatchPanel')).toBeHidden();
+  expect((await shared()).liveId.stringValue).toBe(aLive);
   await ctxA.close();
   await ctxB.close();
 });

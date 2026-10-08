@@ -4,7 +4,7 @@ import { BETTING, houseBetsActive } from '../src/betting/betting-config.js';
 import { matchupKey, isFullLineup, sameTeam } from '../src/betting/matchup.js';
 import { goalProbability, scorelineDistribution, winProbability, toOdds, logLikelihood, pathDistribution, outcomeProbability, normalCdf } from '../src/betting/model.js';
 import { dayKey, firstGoalAt, resolveHouseBet, resolveChallenge, computeBalances, checkBet, openStakeFor, acceptDecision, deniedChallengeReason } from '../src/betting/ledger.js';
-import { shouldClearAfterSubmit, buildOffer, shouldPublishLineup, needsOverwriteConfirm, goalUpdate, isLiveTakeover, ownsLive, showNotSharedHint, liveClaimUpdate } from '../src/betting/current-match.js';
+import { liveStartQuestion, shouldClearAfterSubmit, buildOffer, shouldPublishLineup, needsOverwriteConfirm, goalUpdate, isLiveTakeover, ownsLive, showNotSharedHint, liveClaimUpdate } from '../src/betting/current-match.js';
 import params from '../src/betting/model-params.json' with { type: 'json' };
 import { OUTCOME_TESTS, evaluateOutcome, describeOutcome } from '../src/betting/outcomes.js';
 import { candidateProps, eligible, drawProps, seededRandom } from '../src/betting/props.js';
@@ -428,6 +428,18 @@ console.log('\n=== balances over many matches (indexed) ===');
   const bal = computeBalances(bets, [...filler, m], day + 2000);
   assertEq(bal.get('B0').balance, 100 + 300, 'every bet resolved against the indexed match');
   assertEq(Date.now() - t0 < 500, true, '3,000 bets x 2,000 matches well under a second');
+}
+
+console.log('\n=== live start question ===');
+{
+  const cur = { matchupKey: 'A::B|C::D', liveId: 'x', liveStartedAt: 1, offer: {} };
+  assertEq(liveStartQuestion(cur, 'A::B|C::D', 0, null), 'takeover', 'same matchup live on another phone -> takeover');
+  assertEq(liveStartQuestion(cur, 'A::B|C::D', 0, 'x'), null, 'own live match -> no question');
+  assertEq(liveStartQuestion(cur, 'A::C|B::D', 0, null), 'replace', 'other matchup live -> replace');
+  assertEq(liveStartQuestion({ matchupKey: 'A::B|C::D', offer: {} }, 'A::C|B::D', 2, null), 'replace', 'other matchup with open bets -> replace');
+  assertEq(liveStartQuestion({ matchupKey: 'A::B|C::D', offer: {} }, 'A::C|B::D', 0, null), null, 'idle other matchup without bets -> no question');
+  assertEq(liveStartQuestion(cur, null, 3, null), null, 'incomplete local lineup -> no question (live may start before teams)');
+  assertEq(liveStartQuestion(null, 'A::B|C::D', 0, null), null, 'no shared match -> no question');
 }
 
 // --- further sections are appended by later tasks above this line ---

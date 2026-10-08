@@ -7,11 +7,12 @@ import { getTeamRecord } from '../teams/team-service.js';
 import { showConfirm, showToast } from '../toast.js';
 import { BETTING } from './betting-config.js';
 import { matchupKey, isFullLineup } from './matchup.js';
-import { shouldClearAfterSubmit, shouldPublishLineup, needsOverwriteConfirm, isLiveTakeover, ownsLive, showNotSharedHint } from './current-match.js';
+import { shouldClearAfterSubmit, shouldPublishLineup, needsOverwriteConfirm, isLiveTakeover, ownsLive, showNotSharedHint, liveStartQuestion } from './current-match.js';
 import { getCurrentMatch, publishLineup, publishPositions, publishLiveStart, publishGoal, publishLiveEnd } from './current-match-service.js';
 import { getBets } from './bets-service.js';
 import { openStakeFor } from './ledger.js';
 import { allMatches } from '../match-data-service.js';
+import { setLiveStartGuard, notifyRolesChanged } from '../match-form-handler.js';
 
 let initialized = false;
 let liveId = null; // set once this device's live claim has committed (the shared doc may say otherwise later)
@@ -21,8 +22,12 @@ let goalDirty = false;
 let liveEpoch = 0; // bumped on live start/end, so a claim that commits after its live mode ended is undone
 let liveLocal = false; // core live mode is on here (it may start before the teams are set)
 let localGoals = []; // latest goal log from 'live-goal', published when live is claimed late
-let declined = null; // `${sharedKey}>${localKey}` the user chose to keep; no re-asking until either changes
-let takeoverDeclined = null; // shared live match the user chose not to take over (until live restarts)
+// "Keep shared match" / "Keep other phone" cancel the action itself (one table, one match):
+let stablePositions = null; // local lineup after the last settled pass; restored when a change is declined
+let restoring = false;
+let preConfirmed = null; // { replaceKey, takeoverOf } agreed in the live-start guard, used by the next pass
+let liveStarting = false; // first pass after a live start: a decline there cancels live mode
+let guardPending = false;
 let syncScheduled = false;
 let syncing = false;
 let rerun = false;
@@ -78,12 +83,55 @@ async function confirmReplace(current, open) {
   return showConfirm(lines.join('\n'), { confirmLabel: 'Replace', cancelLabel: 'Keep shared match', type: 'warning' });
 }
 
+function confirmTakeover() {
+  return showConfirm('This match is already live on another phone.\nTake over live scoring here?',
+    { confirmLabel: 'Take over', cancelLabel: 'Keep other phone', type: 'warning' });
+}
+
+/** A declined dialog cancels what triggered it: a live start is stopped again, a lineup
+ *  change (select, Suggest, swap, prefill) is reverted to the lineup before it. */
+function undoAction() {
+  if (liveStarting && liveLocal) {
+    document.getElementById('cancelLiveMode')?.click(); // just started, no goals: ends without a prompt
+    return;
+  }
+  if (!stablePositions) return;
+  const p = stablePositions;
+  restoring = true;
+  try {
+    [teamA1Select.value, teamA2Select.value, teamB1Select.value, teamB2Select.value] =
+      [p.redDefense, p.redOffense, p.blueDefense, p.blueOffense];
+    notifyRolesChanged();
+  } finally { restoring = false; }
+}
+
+/** Asked before live mode starts, so "Keep …" means it never starts. */
+async function liveStartGuard() {
+  if (guardPending) return false;
+  guardPending = true;
+  try {
+    const cur = getCurrentMatch();
+    const { key } = readLineup();
+    const question = liveStartQuestion(cur, key, openFor(cur).count, liveId);
+    if (question === 'takeover') {
+      if (!(await confirmTakeover())) return false;
+      preConfirmed = { takeoverOf: cur.liveId, replaceKey: null };
+    } else if (question === 'replace') {
+      if (!(await confirmReplace(cur, openFor(cur)))) return false;
+      preConfirmed = { takeoverOf: null, replaceKey: cur.matchupKey };
+    } else {
+      preConfirmed = null;
+    }
+    return true;
+  } finally { guardPending = false; }
+}
+
 /** Returns true if the shared doc now carries this device's lineup. The overwrite condition is
  *  re-checked inside the write transaction on the fresh doc: only a doc that newly needs asking
  *  (another matchup, now live or with bets) brings the dialog back, with fresh counts. */
 async function syncLineup() {
   let current = getCurrentMatch();
-  let confirmedKey = null; // shared matchup the user agreed to replace
+  let confirmedKey = preConfirmed?.replaceKey ?? null; // shared matchup the user agreed to replace
   for (let attempt = 0; attempt < 5; attempt++) {
     // read on every round: the lineup may change while a dialog is open
     const { red, blue, positions, key } = readLineup();
@@ -96,9 +144,7 @@ async function syncLineup() {
         return true;
       }
       if (needsAsk(current)) {
-        const pair = `${current.matchupKey}>${key}`;
-        if (declined === pair) return false;
-        if (!(await confirmReplace(current, openFor(current)))) { declined = pair; return false; }
+        if (!(await confirmReplace(current, openFor(current)))) { undoAction(); return false; }
         confirmedKey = current.matchupKey;
         continue;
       }
@@ -146,17 +192,13 @@ function pushGoals() {
  *  had not shown it yet: the claim transaction then reports the fresh doc and the question follows. */
 async function syncOnce() {
   const { key } = readLineup();
-  if (declined && !declined.endsWith(`>${key}`)) declined = null; // local lineup changed
   const live = liveLocal; // a live-start mid-pass re-runs the pass, so it always gets the takeover question
   let cur = getCurrentMatch();
-  let takeoverOf = null; // liveId of the other phone the user agreed to take over from
+  let takeoverOf = preConfirmed?.takeoverOf ?? null; // liveId of the other phone the user agreed to take over from
   for (let attempt = 0; attempt < 3; attempt++) {
     if (live && !ownsLive(cur, liveId) && isLiveTakeover(cur, key) && cur.liveId !== takeoverOf) {
-      const other = `${cur.matchupKey}#${cur.liveId}`;
-      if (takeoverDeclined === other) return;
-      const ok = await showConfirm('This match is already live on another phone.\nTake over live scoring here?',
-        { confirmLabel: 'Take over', cancelLabel: 'Keep other phone', type: 'warning' });
-      if (!ok) { takeoverDeclined = other; return; }
+      // Only reached when this phone's snapshot had not shown the other live match before the guard.
+      if (!(await confirmTakeover())) { undoAction(); return; }
       liveId = null; // re-claim below
       takeoverOf = cur.liveId;
     }
@@ -190,26 +232,27 @@ function scheduleSync() {
     syncScheduled = false;
     try {
       do { rerun = false; await syncOnce().catch(warn); } while (rerun);
-    } finally { syncing = false; renderNotShared(); }
+    } finally {
+      syncing = false;
+      preConfirmed = null;
+      liveStarting = false;
+      stablePositions = readLineup().positions;
+      renderNotShared();
+    }
   }, 0);
 }
 
 export function initSyncController() {
   if (initialized || !BETTING.enabled || !BETTING.liveSync) return;
   initialized = true;
+  setLiveStartGuard(liveStartGuard);
+  stablePositions = readLineup().positions;
 
-  window.addEventListener('current-match-updated', () => {
-    renderNotShared();
-    // The phone we declined to take over from has ended its live match: claim it here now.
-    const cur = getCurrentMatch();
-    if (liveLocal && takeoverDeclined && !cur?.liveId && !cur?.liveStartedAt) {
-      takeoverDeclined = null;
-      scheduleSync();
-    }
-  });
+  window.addEventListener('current-match-updated', renderNotShared);
 
   window.addEventListener('lineup-changed', () => {
-    if (!(navigator.userActivation?.hasBeenActive ?? true)) return; // never on page load
+    if (restoring) return; // our own revert after a declined dialog
+    if (!(navigator.userActivation?.hasBeenActive ?? true)) { stablePositions = readLineup().positions; return; } // never publish on page load
     scheduleSync();
   });
 
@@ -219,8 +262,7 @@ export function initSyncController() {
     liveKey = null;
     liveLocal = true;
     localGoals = [];
-    takeoverDeclined = null;
-    declined = null; // a deliberate live start asks again about replacing the shared match
+    liveStarting = true;
     scheduleSync();
   });
 
@@ -233,6 +275,7 @@ export function initSyncController() {
 
   // Final-score submits never fire live-ended; close the house on the logged matchup here.
   window.addEventListener('match-submitted', (e) => {
+    stablePositions = { redDefense: '', redOffense: '', blueDefense: '', blueOffense: '' };
     const { teamA, teamB } = e.detail || {};
     if (shouldClearAfterSubmit(getCurrentMatch(), teamA || [], teamB || [])) {
       publishLiveEnd({ matchupKey: getCurrentMatch().matchupKey }).catch(warn);

@@ -624,8 +624,16 @@ document.addEventListener('visibilitychange', () => {
     if (liveMode && document.visibilityState === 'visible') requestWakeLock();
 });
 
+let liveStartGuard = null;
+/** Lets an add-on veto starting live mode (betting asks before replacing a shared live match). */
+export function setLiveStartGuard(fn) {
+    liveStartGuard = fn;
+}
+
 async function setLiveMode(enabled, skipPrompt = false) {
     if (enabled === liveMode) return;
+    if (enabled && liveStartGuard && !(await liveStartGuard())) return;
+    if (enabled === liveMode) return; // started meanwhile (double tap during the guard's dialog)
     if (!enabled && goalLog.length > 0 && !skipPrompt) {
         if (!await showConfirm('Switching to Final Score Mode will discard the live goal log. Continue?', { confirmLabel: 'Discard', cancelLabel: 'Keep playing', type: 'warning' })) return;
         goalLog = [];
