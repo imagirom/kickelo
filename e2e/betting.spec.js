@@ -1,6 +1,7 @@
 // e2e/betting.spec.js
 // Two phones: A sets the lineup and runs live mode, B watches and bets.
 import { test, expect } from '@playwright/test';
+import { BETTING } from '../src/betting/betting-config.js';
 import { ensureTestUser, signInViaUI, resetBettingState, DOCS, OWNER } from './helpers.js';
 
 test.beforeAll(async () => { await ensureTestUser(); });
@@ -194,6 +195,7 @@ test('house props: at most count rows, a "No" bet shows on both feeds', async ({
 });
 
 test('challenges: one of two concurrent accepts wins, withdraw hides Accept', async ({ browser }) => {
+  test.skip(!BETTING.challenges, 'challenges are switched off in betting-config.js');
   const { ctx: ctxA, page: a } = await openPhone(browser);
   const { ctx: ctxB, page: b } = await openPhone(browser);
   const { ctx: ctxC, page: c } = await openPhone(browser);
@@ -305,6 +307,7 @@ test('declining a takeover or a replace keeps live mode off on this phone', asyn
 });
 
 test('a challenge to a named player locks in straight away; oversized stakes say why', async ({ browser }) => {
+  test.skip(!BETTING.challenges, 'challenges are switched off in betting-config.js');
   const { ctx: ctxA, page: a } = await openPhone(browser);
   const { ctx: ctxB, page: b } = await openPhone(browser);
   const names = await playerNames(a);
@@ -355,6 +358,7 @@ async function deleteMatchesSince(ms) {
 }
 
 test('pre-match challenges close at the first goal; results stay visible after the next lineup', async ({ browser }) => {
+  test.skip(!BETTING.challenges, 'challenges are switched off in betting-config.js');
   const since = Date.now();
   const { ctx: ctxA, page: a } = await openPhone(browser);
   const { ctx: ctxB, page: b } = await openPhone(browser);
