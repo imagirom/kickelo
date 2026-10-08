@@ -26,7 +26,7 @@ export function shouldPublishLineup(current, red, blue, positions) {
 
 export function needsOverwriteConfirm(current, newKey, openBets) {
   if (!current?.matchupKey || current.matchupKey === newKey) return false;
-  return Boolean(current.liveStartedAt) || openBets > 0;
+  return Boolean(current.liveStartedAt || current.liveId) || openBets > 0;
 }
 
 /** A logged match on the shared matchup ends it: clear the offer (live or final-score mode alike). */
@@ -49,4 +49,18 @@ export function isLiveTakeover(current, newKey) {
 /** Only the device whose liveId is in the shared doc writes goals / ends the live match. */
 export function ownsLive(current, liveId) {
   return Boolean(liveId) && current?.liveId === liveId;
+}
+
+/** Goals scored before this device claimed the live match (e.g. live started before the teams were set).
+ *  firstGoalAt is stamped only if this matchup's betting has not closed yet; never cleared or moved. */
+export function liveClaimUpdate(current, key, goalLog) {
+  return goalUpdate(current?.matchupKey === key ? current : null, goalLog);
+}
+
+/** "Your lineup isn't shared": a full local lineup the shared doc does not carry,
+ *  or live mode here on a shared matchup another phone scores (declined takeover). */
+export function showNotSharedHint(current, localKey, { live = false, liveId = null } = {}) {
+  if (!localKey) return false;
+  if (current?.matchupKey !== localKey) return true;
+  return live && !ownsLive(current, liveId);
 }

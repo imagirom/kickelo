@@ -53,10 +53,12 @@ export async function publishPositions({ red, blue, positions }) {
   await updateDoc(ref(), { red: [...red].sort(), blue: [...blue].sort(), positions, updatedAt: serverTimestamp() });
 }
 
-/** keepFirstGoal: a takeover of a running match must not reopen house betting. */
-export async function publishLiveStart(liveId, { keepFirstGoal = false } = {}) {
-  const update = { liveStartedAt: serverTimestamp(), liveId, goalLog: [], updatedAt: serverTimestamp() };
-  if (!keepFirstGoal) update.firstGoalAt = null;
+/** Claims live scoring for this device. `fields` comes from liveClaimUpdate: the goals so far, and
+ *  firstGoalAt: 'SERVER' only when betting must close now (it is never cleared here). */
+// ponytail: liveStartedAt is the claim time, so a late claim (teams set after kick-off) shows a short spectator timer.
+export async function publishLiveStart(liveId, fields) {
+  const update = { ...fields, liveStartedAt: serverTimestamp(), liveId, updatedAt: serverTimestamp() };
+  if (update.firstGoalAt === 'SERVER') update.firstGoalAt = serverTimestamp();
   await setDoc(ref(), update, { merge: true });
 }
 

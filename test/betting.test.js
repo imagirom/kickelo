@@ -4,7 +4,7 @@ import { BETTING, houseBetsActive } from '../src/betting/betting-config.js';
 import { matchupKey, isFullLineup, sameTeam } from '../src/betting/matchup.js';
 import { goalProbability, scorelineDistribution, winProbability, toOdds, logLikelihood } from '../src/betting/model.js';
 import { dayKey, firstGoalAt, resolveHouseBet, computeBalances, checkBet } from '../src/betting/ledger.js';
-import { shouldClearAfterSubmit, buildOffer, shouldPublishLineup, needsOverwriteConfirm, goalUpdate, isLiveTakeover, ownsLive } from '../src/betting/current-match.js';
+import { shouldClearAfterSubmit, buildOffer, shouldPublishLineup, needsOverwriteConfirm, goalUpdate, isLiveTakeover, ownsLive, showNotSharedHint, liveClaimUpdate } from '../src/betting/current-match.js';
 import params from '../src/betting/model-params.json' with { type: 'json' };
 
 let passed = 0;
@@ -160,6 +160,7 @@ console.log('\n=== current match helpers ===');
   assertEq(needsOverwriteConfirm(cur, 'A::C|B::D', 0), false, 'idle match without bets -> no confirm');
   assertEq(needsOverwriteConfirm(cur, 'A::C|B::D', 2), true, 'open bets -> confirm');
   assertEq(needsOverwriteConfirm({ ...cur, liveStartedAt: 1 }, 'A::C|B::D', 0), true, 'live -> confirm');
+  assertEq(needsOverwriteConfirm({ ...cur, liveId: 'x', liveStartedAt: null }, 'A::C|B::D', 0), true, 'live start still pending (server timestamp unresolved) -> confirm');
   assertEq(needsOverwriteConfirm(cur, cur.matchupKey, 5), false, 'same matchup -> never confirm');
   assertEq(needsOverwriteConfirm(null, 'A::C|B::D', 5), false, 'no current -> no confirm');
 
@@ -186,6 +187,29 @@ console.log('\n=== submit clears offer ===');
   assertEq(shouldClearAfterSubmit(cur, ['A', 'C'], ['B', 'D']), false, 'other matchup logged -> shared match untouched');
   assertEq(shouldClearAfterSubmit({ ...cur, offer: null }, ['A', 'B'], ['C', 'D']), false, 'already cleared -> no write');
   assertEq(shouldClearAfterSubmit(null, ['A', 'B'], ['C', 'D']), false, 'no shared match -> no write');
+}
+
+console.log('\n=== not-shared hint ===');
+{
+  const cur = { matchupKey: 'A::B|C::D', liveId: 'mine' };
+  assertEq(showNotSharedHint(cur, null, {}), false, 'incomplete local lineup -> no hint');
+  assertEq(showNotSharedHint(cur, 'A::B|C::D', {}), false, 'owner of the shared lineup -> no hint');
+  assertEq(showNotSharedHint(cur, 'A::B|C::D', { live: true, liveId: 'mine' }), false, 'live owner -> no hint');
+  assertEq(showNotSharedHint(cur, 'A::C|B::D', {}), true, 'different local lineup -> hint');
+  assertEq(showNotSharedHint(null, 'A::C|B::D', {}), true, 'nothing shared yet -> hint');
+  assertEq(showNotSharedHint(cur, 'A::B|C::D', { live: true, liveId: null }), true, 'declined takeover: live here, owned elsewhere -> hint');
+  assertEq(showNotSharedHint(cur, 'A::B|C::D', { live: false, liveId: null }), false, 'spectator of own lineup -> no hint');
+}
+
+console.log('\n=== live claim ===');
+{
+  const goals = [{ team: 'red', timestamp: 1 }];
+  const cur = { matchupKey: 'A::B|C::D', firstGoalAt: null };
+  assertEq(liveClaimUpdate(cur, 'A::B|C::D', []), { goalLog: [] }, 'no goals yet -> firstGoalAt untouched');
+  assertEq(liveClaimUpdate(cur, 'A::B|C::D', goals), { goalLog: goals, firstGoalAt: 'SERVER' }, 'goals scored before the claim close betting');
+  assertEq(liveClaimUpdate({ ...cur, firstGoalAt: 5 }, 'A::B|C::D', goals), { goalLog: goals }, 'closed betting is never moved later');
+  assertEq(liveClaimUpdate({ ...cur, firstGoalAt: 5 }, 'A::B|C::D', []), { goalLog: [] }, 'takeover never reopens betting');
+  assertEq(liveClaimUpdate({ matchupKey: 'X::Y|Z::W', firstGoalAt: 5 }, 'A::B|C::D', goals), { goalLog: goals, firstGoalAt: 'SERVER' }, 'stale doc of another matchup -> stamp');
 }
 
 // --- further sections are appended by later tasks above this line ---

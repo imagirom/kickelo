@@ -12,8 +12,35 @@ async function resetBettingState() {
   await Promise.all(paths.map((p) => fetch(`${DOCS}/${p}`, { method: 'DELETE', headers: OWNER })));
 }
 
-test.beforeAll(async () => { await ensureTestUser(); await resetBettingState(); });
+test.beforeAll(async () => { await ensureTestUser(); });
+test.beforeEach(async () => { await resetBettingState(); });
 test.afterAll(async () => { await resetBettingState(); }); // leave the emulator clean for manual testing
+
+const shared = async () => (await (await fetch(`${DOCS}/meta/currentMatch`, { headers: OWNER })).json()).fields;
+
+async function openPhone(browser) {
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  await signInViaUI(page);
+  await page.waitForFunction(() => document.querySelectorAll('#teamA1 option').length > 6);
+  await page.click('body'); // user activation
+  return { ctx, page };
+}
+
+const playerNames = (page) => page.$$eval('#teamA1 option', (os) => os.map((o) => o.value).filter((v) => v && v !== '__add_new__').slice(0, 6));
+
+// Programmatic lineup change the way Suggest / swaps / tournament prefill do it:
+// set all four selects, then notifyRolesChanged() fires lineup-changed once per team.
+async function setLineupLikeSuggest(page, [a1, a2, b1, b2]) {
+  await page.evaluate(([v1, v2, v3, v4]) => {
+    document.getElementById('teamA1').value = v1;
+    document.getElementById('teamA2').value = v2;
+    document.getElementById('teamB1').value = v3;
+    document.getElementById('teamB2').value = v4;
+    window.dispatchEvent(new CustomEvent('lineup-changed'));
+    window.dispatchEvent(new CustomEvent('lineup-changed'));
+  }, [a1, a2, b1, b2]);
+}
 
 async function pickLineup(page, [a1, a2, b1, b2]) {
   await page.selectOption('#teamA1', a1);
@@ -69,7 +96,6 @@ test('lineup, live score and house bets sync across phones', async ({ browser })
 
   // B starting live mode on the same, already-live matchup asks first (spec Concurrency #7);
   // declining keeps A's live match: B's goals never reach the shared doc, betting stays closed.
-  const shared = async () => (await (await fetch(`${DOCS}/meta/currentMatch`, { headers: OWNER })).json()).fields;
   await b.click('body');
   await pickLineup(b, names);
   await b.click('#toggleLiveMode');
@@ -84,4 +110,68 @@ test('lineup, live score and house bets sync across phones', async ({ browser })
 
   await ctxA.close();
   await ctxB.close();
+});
+
+test('live mode started before the teams are set is shared once they are', async ({ browser }) => {
+  const { ctx: ctxA, page: a } = await openPhone(browser);
+  const { ctx: ctxB, page: b } = await openPhone(browser);
+  const names = await playerNames(a);
+  await a.click('#toggleLiveMode');
+  await a.click('#btnRedScored');
+  await pickLineup(a, names.slice(0, 4));
+
+  const box = b.locator('#betsBox');
+  await expect(box).toContainText('LIVE', { timeout: 10000 });
+  await expect(box).toContainText('1 : 0');
+  await expect(box).toContainText('Closed at first goal');
+  await a.click('#btnBlueScored');
+  await expect(box).toContainText('1 : 1');
+  const doc = await shared();
+  expect(doc.goalLog.arrayValue.values).toHaveLength(2);
+  expect(doc.firstGoalAt.timestampValue).toBeTruthy();
+  await expect(a.locator('#betsNotShared')).toBeHidden();
+
+  // Changing a player mid-game (confirmed) keeps the live match shared with its goals.
+  await a.selectOption('#teamB2', names[4]);
+  await expect(a.locator('.confirm-dialog')).toContainText('currently live');
+  await a.locator('.confirm-btn-ok').click();
+  await expect(box).toContainText(names[4].slice(0, 3), { timeout: 10000 });
+  await expect(box).toContainText('LIVE');
+  await expect(box).toContainText('1 : 1');
+  await expect(a.locator('#betsNotShared')).toBeHidden();
+
+  await ctxA.close();
+  await ctxB.close();
+});
+
+test('a burst of lineup events asks once and a decline is remembered', async ({ browser }) => {
+  const { ctx, page: a } = await openPhone(browser);
+  const names = await playerNames(a);
+  await pickLineup(a, names.slice(0, 4));
+  await a.click('#toggleLiveMode');
+  await expect.poll(async () => (await shared())?.liveId?.stringValue ?? null, { timeout: 10000 }).toBeTruthy();
+  await expect(a.locator('#betsNotShared')).toBeHidden();
+
+  const other = [names[0], names[4], names[2], names[5]];
+  await setLineupLikeSuggest(a, other);
+  await expect(a.locator('.confirm-dialog')).toHaveCount(1);
+  await a.waitForTimeout(500);
+  await expect(a.locator('.confirm-dialog')).toHaveCount(1);
+  await a.locator('.confirm-btn-cancel').click();
+  await a.waitForTimeout(800);
+  await expect(a.locator('.confirm-dialog')).toHaveCount(0);
+  await expect(a.locator('#betsNotShared')).toBeVisible();
+
+  // Same lineup again: no new dialog.
+  await setLineupLikeSuggest(a, other);
+  await a.waitForTimeout(800);
+  await expect(a.locator('.confirm-dialog')).toHaveCount(0);
+
+  // Back to the shared lineup: the owner never sees the hint.
+  await setLineupLikeSuggest(a, names.slice(0, 4));
+  await expect(a.locator('#betsNotShared')).toBeHidden();
+  await a.click('#btnRedScored');
+  await expect.poll(async () => (await shared())?.goalLog?.arrayValue?.values?.length ?? 0).toBe(1);
+  await expect(a.locator('#betsNotShared')).toBeHidden();
+  await ctx.close();
 });
