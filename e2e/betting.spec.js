@@ -240,3 +240,57 @@ test('challenges: one of two concurrent accepts wins, withdraw hides Accept', as
   await ctxB.close();
   await ctxC.close();
 });
+
+test('a phone that lost the shared match never writes its goals or end onto the new one', async ({ browser }) => {
+  const { ctx: ctxA, page: a } = await openPhone(browser);
+  const { ctx: ctxB, page: b } = await openPhone(browser);
+  const names = await playerNames(a);
+  await pickLineup(a, names.slice(0, 4));
+  await a.click('#toggleLiveMode');
+  await expect.poll(async () => (await shared())?.liveId?.stringValue ?? null, { timeout: 10000 }).toBeTruthy();
+
+  // A drops off the network; B replaces the shared match (confirmed, A was live).
+  await ctxA.setOffline(true);
+  await pickLineup(b, [names[0], names[4], names[2], names[5]]);
+  await expect(b.locator('.confirm-dialog')).toContainText('currently live');
+  await b.locator('.confirm-btn-ok').click();
+  await expect.poll(async () => (await shared())?.red?.arrayValue?.values?.map((v) => v.stringValue).includes(names[4]) ?? false,
+    { timeout: 10000 }).toBe(true);
+
+  // A, still on its old snapshot, scores and cancels; back online nothing of it reaches B's match.
+  await a.click('#btnRedScored');
+  await ctxA.setOffline(false);
+  await a.click('#btnRedScored');
+  await a.click('#cancelLiveMode');
+  if (await a.locator('.confirm-dialog').count()) await a.locator('.confirm-btn-ok').click();
+  await a.waitForTimeout(3000);
+  const doc = await shared();
+  expect(doc.goalLog.arrayValue.values ?? []).toHaveLength(0);
+  expect(doc.firstGoalAt.nullValue).toBeDefined();
+  expect(doc.offer.mapValue).toBeTruthy();
+  await ctxA.close();
+  await ctxB.close();
+});
+
+test('after a declined takeover, this phone claims live scoring once the other phone ends', async ({ browser }) => {
+  const { ctx: ctxA, page: a } = await openPhone(browser);
+  const { ctx: ctxB, page: b } = await openPhone(browser);
+  const names = await playerNames(a);
+  await pickLineup(a, names.slice(0, 4));
+  await a.click('#toggleLiveMode');
+  await expect.poll(async () => (await shared())?.liveId?.stringValue ?? null, { timeout: 10000 }).toBeTruthy();
+  const aLive = (await shared()).liveId.stringValue;
+
+  await pickLineup(b, names.slice(0, 4));
+  await b.click('#toggleLiveMode');
+  await expect(b.locator('.confirm-dialog')).toContainText('already live');
+  await b.locator('.confirm-btn-cancel').click();
+
+  await a.click('#cancelLiveMode');
+  await expect.poll(async () => { const id = (await shared())?.liveId?.stringValue; return Boolean(id) && id !== aLive; },
+    { timeout: 10000 }).toBe(true);
+  await b.click('#btnBlueScored');
+  await expect.poll(async () => (await shared())?.goalLog?.arrayValue?.values?.length ?? 0).toBe(1);
+  await ctxA.close();
+  await ctxB.close();
+});

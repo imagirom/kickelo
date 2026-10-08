@@ -316,9 +316,16 @@ resolution re-checks everything from match data.
    transaction; rules allow accept only if `acceptedBy == null && void == false`,
    and challenge withdraw only if `acceptedBy == null`. Exactly one wins; the
    loser sees a toast ("Already taken by Marc").
-3. **Stale overwrite dialog.** Pair changes and live-mode cancel are written in a
-   transaction that re-reads `meta/currentMatch`; if `updatedAt` differs from what
-   the dialog showed, the dialog is shown again with fresh counts.
+3. **Stale overwrite dialog / stale phones.** Every write to `meta/currentMatch`
+   (lineup, positions, live claim, goals, live end) is a transaction that re-reads
+   it. A lineup replace re-checks the overwrite condition on the fresh doc: if that
+   doc newly needs asking (another matchup than the one confirmed, now live or with
+   bets), the dialog is shown again with fresh counts; goals scored meanwhile on the
+   confirmed match do not ask again. Goals and live end are written only while the
+   doc still carries this phone's `liveId` (or, after a submit, the logged matchup),
+   so a phone with a stale or offline snapshot never writes onto a newer match.
+   These writes fail offline instead of queueing. A phone that is live locally
+   claims live scoring in the same write as its lineup.
 4. **Diverging odds across phones.** Solved by the published `offer` (see UI).
 5. **Concurrent stakes for one player.** Not prevented (rules cannot sum derived
    balances). Balances may go slightly negative; further stakes are blocked until
