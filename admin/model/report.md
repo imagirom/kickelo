@@ -1,6 +1,6 @@
 # Winner model report
 
-Generated 2026-10-08T00:38:14.629Z from `firestore-backup-2026-10-07T21-58-17-142Z.json`.
+Generated 2026-10-08T01:18:34.138Z from `firestore-backup-2026-10-07T21-58-17-142Z.json`.
 Matches used: 1680 (burn-in 186 dropped), train 1456, test (last 90 days) 224.
 
 ## Parameters (fit on all usable matches; shipped)
@@ -36,24 +36,24 @@ Note: the client prices with season-cache ELO; at a season start gaps are small 
 
 Samples: scoreline 1680, goal log 1636.
 
-### Duration (ln seconds = a + b·|gap| + ε; live matches 30 s – 30 min)
+### Duration to the last goal (ln seconds = a + b·|gap| + ε; live matches 30 s – 30 min)
 | fit | a | b | sigma | n | median at gap 0 |
 |---|---|---|---|---|---|
-| shipped (all) | 5.5659 | -2.492e-4 | 0.4217 | 1629 | 261 s |
-| train | 5.5617 | -2.653e-4 | 0.4256 | 1407 | 260 s |
+| shipped (all) | 5.5247 | -2.624e-4 | 0.4401 | 1628 | 251 s |
+| train | 5.5199 | -2.733e-4 | 0.4428 | 1406 | 250 s |
 
 ### Per-prop backtest (fit on train, evaluated on test; both team sides pooled)
 | family | n | mean p | observed | Brier model | Brier base rate | Brier logistic |
 |---|---|---|---|---|---|---|
 | comebackAtLeast:1 | 444 | 0.225 | 0.214 | 0.1682 | 0.1683 | 0.1717 |
 | comebackAtLeast:2 | 444 | 0.074 | 0.079 | 0.0728 | 0.0727 | 0.0736 |
-| durationOver:180 | 222 | 0.774 | 0.865 | 0.1257 | 0.1249 | 0.1247 |
-| durationOver:210 | 222 | 0.653 | 0.779 | 0.1897 | 0.1831 | 0.1833 |
-| durationOver:240 | 222 | 0.532 | 0.604 | 0.2445 | 0.2410 | 0.2408 |
-| durationOver:270 | 222 | 0.423 | 0.455 | 0.2482 | 0.2481 | 0.2476 |
-| durationOver:300 | 222 | 0.329 | 0.365 | 0.2299 | 0.2322 | 0.2323 |
-| durationOver:330 | 222 | 0.253 | 0.270 | 0.1955 | 0.1973 | 0.1974 |
-| durationOver:360 | 222 | 0.193 | 0.194 | 0.1547 | 0.1562 | 0.1562 |
+| durationOver:180 | 222 | 0.735 | 0.838 | 0.1472 | 0.1445 | 0.1442 |
+| durationOver:210 | 222 | 0.610 | 0.721 | 0.2138 | 0.2078 | 0.2080 |
+| durationOver:240 | 222 | 0.492 | 0.568 | 0.2503 | 0.2467 | 0.2469 |
+| durationOver:270 | 222 | 0.388 | 0.423 | 0.2426 | 0.2444 | 0.2445 |
+| durationOver:300 | 222 | 0.301 | 0.347 | 0.2258 | 0.2276 | 0.2281 |
+| durationOver:330 | 222 | 0.231 | 0.243 | 0.1831 | 0.1841 | 0.1845 |
+| durationOver:360 | 222 | 0.176 | 0.176 | 0.1438 | 0.1448 | 0.1449 |
 | firstScorerWins:- | 222 | 0.676 | 0.703 | 0.2091 | 0.2096 | 0.2100 |
 | goesToFourFour:- | 224 | 0.210 | 0.246 | 0.1837 | 0.1863 | 0.1862 |
 | marginAtLeast:2 | 448 | 0.404 | 0.377 | 0.2037 | 0.2352 | 0.2041 |

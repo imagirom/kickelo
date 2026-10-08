@@ -155,7 +155,14 @@ refunded.
   are measured on one device, so device clock offsets cancel.
   Bets on matches without `goalLog` (not played in live mode) are refunded.
 - Challenges count only if `acceptedAt < timestamp` of the match. Challenges
-  not accepted by then are cancelled (refunded).
+  not accepted by then are cancelled (refunded). A challenge posted before the
+  first goal must also be accepted before it (`acceptedAt < firstGoalAt`, rules:
+  `meta/currentMatch.firstGoalAt == null` at accept time); one posted mid-match
+  stays acceptable until the match is logged, since both sides see the score.
+- Known limit: if the scoring phone is offline, `meta/currentMatch.firstGoalAt`
+  is written late and the logged match's `timestamp` (server time of the queued
+  write) is late too, so both cutoffs move late by the offline delay. Not fixable
+  without a server-side clock on the goals; accepted for a trust-based game.
 
 **Payouts:**
 - House: win → `stake × odds`, loss → 0, refund → `stake`.
@@ -184,7 +191,7 @@ phase 1 uses only `winner`.
 | `marginAtLeast` | team, k | no |
 | `shutout` (5:0) | team | no |
 | `goesToFourFour` | — | no |
-| `durationOver` | T (30 s steps) | yes (`matchDuration`) |
+| `durationOver` | T (30 s steps) | yes (time of the last goal, not `matchDuration`, which runs until Submit) |
 | `scoresFirst` | team | yes |
 | `firstScorerWins` | — | yes |
 | `comebackAtLeast` | team, k (winner was behind by ≥ k) | yes |

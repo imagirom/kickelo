@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeAllPlayerStats } from '../../src/player-stats-batch.js';
 import { logLikelihood, winProbability, scorelineDistribution } from '../../src/betting/model.js';
-import { evaluateOutcome } from '../../src/betting/outcomes.js';
+import { evaluateOutcome, decidedAtMs } from '../../src/betting/outcomes.js';
 import { candidateProps } from '../../src/betting/props.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -118,8 +118,10 @@ function marginTable(params, data) {
 const isLive = (r) => Array.isArray(r.match.goalLog) && r.match.goalLog.length > 0 && typeof r.match.matchDuration === 'number';
 
 // ln(seconds) = a + b*|gap| + eps, OLS on live matches with 30 s < duration < 30 min.
+// Duration = time of the last goal (what durationOver resolves on), not matchDuration, which
+// keeps running until Submit is pressed.
 function fitDuration(data) {
-  const pts = data.filter(isLive).map((r) => [Math.abs(r.gap), r.match.matchDuration / 1000])
+  const pts = data.filter(isLive).map((r) => [Math.abs(r.gap), decidedAtMs(r.match) / 1000])
     .filter(([, sec]) => sec > 30 && sec < 1800).map(([x, sec]) => [x, Math.log(sec)]);
   const n = pts.length;
   const mx = pts.reduce((s, [x]) => s + x, 0) / n;
@@ -221,7 +223,7 @@ Note: the client prices with season-cache ELO; at a season start gaps are small 
 
 Samples: scoreline ${out.samples.scoreline}, goal log ${out.samples.goalLog}.
 
-### Duration (ln seconds = a + b·|gap| + ε; live matches 30 s – 30 min)
+### Duration to the last goal (ln seconds = a + b·|gap| + ε; live matches 30 s – 30 min)
 | fit | a | b | sigma | n | median at gap 0 |
 |---|---|---|---|---|---|
 | shipped (all) | ${durationAll.a.toFixed(4)} | ${durationAll.b.toExponential(3)} | ${durationAll.sigma.toFixed(4)} | ${durationAll.n} | ${Math.round(Math.exp(durationAll.a))} s |

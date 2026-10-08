@@ -10,7 +10,7 @@ export const OUTCOME_TESTS = [
   { id: 'marginAtLeast', needsGoalLog: false, hasTeam: true, thresholds: [2, 3, 4] },
   { id: 'shutout', needsGoalLog: false, hasTeam: true, thresholds: null },
   { id: 'goesToFourFour', needsGoalLog: false, hasTeam: false, thresholds: null },
-  { id: 'durationOver', needsGoalLog: true, hasTeam: false, thresholds: [180, 210, 240, 270, 300, 330, 360] },
+  { id: 'durationOver', needsGoalLog: true, hasTeam: false, thresholds: [180, 210, 240, 270, 300, 330, 360] }, // last goal's time
   { id: 'scoresFirst', needsGoalLog: true, hasTeam: true, thresholds: null },
   { id: 'firstScorerWins', needsGoalLog: true, hasTeam: false, thresholds: null },
   { id: 'comebackAtLeast', needsGoalLog: true, hasTeam: true, thresholds: [1, 2] },
@@ -25,6 +25,14 @@ function sideOf(match, team) {
 
 const colourOf = (side) => (side === 'A' ? 'red' : 'blue');
 
+/** Time of the deciding (last) goal in ms since start, or null without a goal log. Used instead of
+ *  matchDuration, which runs on until someone presses Submit and so is set by the logger. */
+export function decidedAtMs(match) {
+  const log = match.goalLog;
+  const t = Array.isArray(log) && log.length ? log[log.length - 1].timestamp : null;
+  return typeof t === 'number' ? t : null;
+}
+
 function raw(match, { test, team, threshold }) {
   const side = sideOf(match, team);
   const def = OUTCOME_TESTS.find((t) => t.id === test);
@@ -38,8 +46,10 @@ function raw(match, { test, team, threshold }) {
     case 'marginAtLeast': return won && goalsFor - goalsAgainst >= threshold;
     case 'shutout': return won && goalsAgainst === 0;
     case 'goesToFourFour': return Math.min(match.goalsA, match.goalsB) === MAX_GOALS - 1;
-    case 'durationOver':
-      return typeof match.matchDuration === 'number' ? match.matchDuration > threshold * 1000 : null;
+    case 'durationOver': {
+      const t = decidedAtMs(match);
+      return t === null ? null : t > threshold * 1000;
+    }
     case 'scoresFirst': return log ? log[0].team === colourOf(side) : null;
     case 'firstScorerWins': return log ? match.winner === (log[0].team === 'red' ? 'A' : 'B') : null;
     case 'comebackAtLeast': {

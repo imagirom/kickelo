@@ -217,7 +217,7 @@ console.log('\n=== live claim ===');
 console.log('\n=== outcome tests ===');
 {
   const R = ['Manuel', 'Marc']; const B = ['Roman', 'Tobi'];
-  const g = (seq) => seq.split('').map((c, i) => ({ team: c === 'r' ? 'red' : 'blue', timestamp: (i + 1) * 10000 }));
+  const g = (seq) => seq.split('').map((c, i) => ({ team: c === 'r' ? 'red' : 'blue', timestamp: (i + 1) * 34000 }));
   // red falls behind 0:2 then wins 5:3
   const m = { teamA: R, teamB: B, winner: 'A', goalsA: 5, goalsB: 3, matchDuration: 275000, goalLog: g('bbrrrbrr') };
   const o = (test, extra = {}) => ({ test, team: null, threshold: null, ...extra });
@@ -229,8 +229,10 @@ console.log('\n=== outcome tests ===');
   assertEq(evaluateOutcome({ ...m, goalsB: 0 }, o('shutout', { team: R })), true, 'shutout');
   assertEq(evaluateOutcome(m, o('goesToFourFour')), false, '5:3 did not reach 4:4');
   assertEq(evaluateOutcome({ ...m, goalsB: 4 }, o('goesToFourFour')), true, '5:4 reached 4:4');
-  assertEq(evaluateOutcome(m, o('durationOver', { threshold: 270 })), true, '4:35 is over 4:30');
-  assertEq(evaluateOutcome(m, o('durationOver', { threshold: 300 })), false, '4:35 is not over 5:00');
+  assertEq(evaluateOutcome(m, o('durationOver', { threshold: 270 })), true, 'last goal at 4:32 is over 4:30');
+  assertEq(evaluateOutcome(m, o('durationOver', { threshold: 300 })), false, 'last goal at 4:32 is not over 5:00');
+  assertEq(evaluateOutcome({ ...m, matchDuration: 400000 }, o('durationOver', { threshold: 300 })), false, 'a late Submit (timer still running) does not change duration');
+  assertEq(evaluateOutcome({ ...m, goalLog: [] }, o('durationOver', { threshold: 270 })), null, 'duration needs a goal log');
   assertEq(evaluateOutcome(m, o('scoresFirst', { team: B })), true, 'blue scored first');
   assertEq(evaluateOutcome(m, o('firstScorerWins')), false, 'first scorer lost');
   assertEq(evaluateOutcome(m, o('comebackAtLeast', { team: R, threshold: 2 })), true, 'comeback from 2 down');
@@ -313,7 +315,7 @@ console.log('\n=== prop bets in the ledger ===');
   const bet = (outcome) => ({ kind: 'house', matchupKey: 'Manuel::Marc|Roman::Tobi', placedAt: day, bettor: 'S', stake: 10, odds: 2, outcome, void: false });
   assertEq(resolveHouseBet(bet({ test: 'marginAtLeast', team: R, threshold: 3 }), [m], day + 400000).status, 'won', 'margin prop wins');
   assertEq(resolveHouseBet(bet({ test: 'marginAtLeast', team: R, threshold: 3, negate: true }), [m], day + 400000).status, 'lost', 'negated side loses');
-  assertEq(resolveHouseBet(bet({ test: 'durationOver', team: null, threshold: 300 }), [{ ...m, matchDuration: undefined }], day + 400000).status, 'refunded', 'missing data -> refund');
+  assertEq(resolveHouseBet(bet({ test: 'durationOver', team: null, threshold: 300 }), [{ ...m, goalLog: undefined }], day + 400000).status, 'refunded', 'missing data -> refund');
   assertEq(resolveHouseBet(bet({ test: 'winner', team: R }), [m], day + 400000).payout, 20, 'phase-1 winner bets unchanged');
 }
 
@@ -338,7 +340,7 @@ console.log('\n=== challenges in the ledger ===');
   const m = { id: 'c1', timestamp: day + 600000, teamA: R, teamB: B, winner: 'A', goalsA: 5, goalsB: 1, matchDuration: 240000, goalLog: [{ team: 'red', timestamp: 1 }] };
   const ch = (extra = {}) => ({ kind: 'challenge', matchupKey: key, placedAt: day, challenger: 'Simon', challengerStake: 10,
     opponent: null, opponentStake: 30, outcome: { test: 'marginAtLeast', team: R, threshold: 3 }, acceptedBy: null, acceptedAt: null, void: false, ...extra });
-  const acc = { acceptedBy: 'Peter', acceptedAt: day + 400000 };
+  const acc = { acceptedBy: 'Peter', acceptedAt: day + 300000 }; // first goal at day + 360001
 
   assertEq(resolveChallenge(ch(), [], day + 1000).status, 'open', 'unaccepted, no match -> open');
   assertEq(resolveChallenge(ch(), [m], day + 700000).status, 'cancelled', 'unaccepted when match logged -> cancelled');
@@ -346,9 +348,12 @@ console.log('\n=== challenges in the ledger ===');
   assertEq(resolveChallenge(ch(acc), [m], day + 700000), { status: 'won', matchId: 'c1', challengerPayout: 40, acceptorPayout: 0 }, 'challenger right -> takes both stakes');
   assertEq(resolveChallenge(ch({ ...acc, outcome: { test: 'marginAtLeast', team: B, threshold: 3 } }), [m], day + 700000).acceptorPayout, 40, 'challenger wrong -> acceptor takes both');
   assertEq(resolveChallenge(ch({ acceptedBy: 'Peter', acceptedAt: day + 650000 }), [m], day + 700000).status, 'cancelled', 'accepted after the match was logged -> cancelled');
-  assertEq(resolveChallenge(ch({ ...acc, outcome: { test: 'durationOver', team: null, threshold: 300 } }), [{ ...m, matchDuration: undefined }], day + 700000),
+  assertEq(resolveChallenge(ch({ ...acc, outcome: { test: 'durationOver', team: null, threshold: 300 } }), [{ ...m, goalLog: undefined }], day + 700000),
     { status: 'refunded', matchId: 'c1', challengerPayout: 10, acceptorPayout: 30 }, 'undecidable outcome -> both refunded');
   assertEq(resolveChallenge(ch(acc), [], day + 24 * 3600 * 1000).status, 'refunded', 'accepted, no match by day end -> refunded');
+  assertEq(resolveChallenge(ch({ acceptedBy: 'Peter', acceptedAt: day + 400000 }), [m], day + 700000).status, 'cancelled', 'posted before kick-off, accepted after the first goal -> cancelled');
+  assertEq(resolveChallenge(ch({ placedAt: day + 370000, acceptedBy: 'Peter', acceptedAt: day + 400000 }), [m], day + 700000).status, 'won', 'posted mid-match, accepted mid-match -> counts');
+  assertEq(resolveChallenge(ch({ acceptedBy: 'Peter', acceptedAt: day + 400000 }), [{ ...m, goalLog: undefined }], day + 700000).status, 'won', 'no goal log -> only the logging time cuts off');
 
   const bal = computeBalances([ch(acc)], [m], day + 700000);
   assertEq(bal.get('Simon').balance, 100 - 10 + 40, 'challenger balance after a win');
@@ -392,6 +397,32 @@ console.log('\n=== denied challenge write -> reason from a fresh read ===');
   assertEq(deniedChallengeReason(null, 'Peter'), 'withdrawn', 'doc gone -> withdrawn');
   assertEq(deniedChallengeReason({ ...c, acceptedBy: 'Tobi' }), 'taken:Tobi', 'withdraw lost to accept -> taken:<acceptor>');
   assertEq(deniedChallengeReason(c), 'closed', 'withdraw denied otherwise -> closed');
+}
+
+console.log('\n=== day end ===');
+{
+  // 2026-10-25 has 25 hours in Europe (DST ends); +24h from midnight would be 23:00 the same day.
+  const placed = new Date(2026, 9, 25, 1).getTime();
+  const lateSameDay = new Date(2026, 9, 25, 23, 30).getTime();
+  const nextDay = new Date(2026, 9, 26, 0, 5).getTime();
+  const hb = { kind: 'house', matchupKey: 'A::B|C::D', placedAt: placed, bettor: 'S', stake: 10, odds: 2, outcome: { test: 'winner', team: ['A', 'B'] }, void: false };
+  assertEq(resolveHouseBet(hb, [], lateSameDay).status, 'open', 'still open late on a 25-hour day');
+  assertEq(resolveHouseBet(hb, [], nextDay).status, 'refunded', 'refunded after midnight');
+  const short = { ...hb, placedAt: new Date(2026, 2, 29, 1).getTime() }; // 23-hour day
+  assertEq(resolveHouseBet(short, [], new Date(2026, 2, 30, 0, 5).getTime()).status, 'refunded', 'refunded right after midnight on a 23-hour day');
+}
+
+console.log('\n=== balances over many matches (indexed) ===');
+{
+  const day = new Date(2026, 9, 8, 12).getTime();
+  const R = ['Manuel', 'Marc']; const B = ['Roman', 'Tobi'];
+  const filler = Array.from({ length: 2000 }, (_, i) => ({ id: `f${i}`, timestamp: day - 86400000 * (1 + (i % 300)), teamA: ['P', 'Q'], teamB: ['X', 'Y'], winner: 'A', goalsA: 5, goalsB: 0 }));
+  const m = { id: 'real', timestamp: day + 1000, teamA: R, teamB: B, winner: 'A', goalsA: 5, goalsB: 1, matchDuration: 200000, goalLog: [{ team: 'red', timestamp: 100000 }] };
+  const bets = Array.from({ length: 3000 }, (_, i) => ({ kind: 'house', matchupKey: 'Manuel::Marc|Roman::Tobi', placedAt: day - 200000, bettor: `B${i % 10}`, stake: 1, odds: 2, outcome: { test: 'winner', team: R }, void: false }));
+  const t0 = Date.now();
+  const bal = computeBalances(bets, [...filler, m], day + 2000);
+  assertEq(bal.get('B0').balance, 100 + 300, 'every bet resolved against the indexed match');
+  assertEq(Date.now() - t0 < 500, true, '3,000 bets x 2,000 matches well under a second');
 }
 
 // --- further sections are appended by later tasks above this line ---
