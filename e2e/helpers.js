@@ -7,8 +7,19 @@
  */
 
 const AUTH_EMULATOR = 'http://127.0.0.1:9099';
-const TEST_EMAIL = 'apps.imagirom@gmail.com';
-const TEST_PASSWORD = 'test-password-e2e';
+export const TEST_EMAIL = 'apps.imagirom@gmail.com';
+export const TEST_PASSWORD = 'test-password-e2e';
+
+// Emulator only: the owner token bypasses the rules (cleanup and seeding).
+export const DOCS = 'http://127.0.0.1:7070/v1/projects/kickelo/databases/(default)/documents';
+export const OWNER = { Authorization: 'Bearer owner' };
+
+/** No shared match and no bets, so reruns are independent. */
+export async function resetBettingState() {
+  const { documents = [] } = await (await fetch(`${DOCS}/bets?pageSize=1000`, { headers: OWNER })).json();
+  const paths = [...documents.map((d) => d.name.split('/documents/')[1]), 'meta/currentMatch'];
+  await Promise.all(paths.map((p) => fetch(`${DOCS}/${p}`, { method: 'DELETE', headers: OWNER })));
+}
 
 /** Ensure the test user exists in the Auth emulator. */
 export async function ensureTestUser() {

@@ -109,7 +109,20 @@ service cloud.firestore {
     match /meta/{docId} {
       // Allow any signed-in user to read and write session data,
       // like the list of active players for pairing suggestions.
-      allow read, write: if canAccess();
+      allow read: if canAccess();
+      allow write: if canAccess() && docId != 'currentMatch';
+    }
+
+    // Shared live match for betting: never deleted, and betting that closed at the first goal
+    // is not reopened unless the match itself is replaced or ended (matchupKey or offer change).
+    match /meta/currentMatch {
+      allow read, create: if canAccess();
+      allow update: if canAccess() && !(
+            resource.data.get('firstGoalAt', null) != null
+            && request.resource.data.get('firstGoalAt', null) == null
+            && request.resource.data.get('matchupKey', null) == resource.data.get('matchupKey', null)
+            && request.resource.data.get('offer', null) == resource.data.get('offer', null));
+      allow delete: if false;
     }
 
     // --- Rules for the 'users' collection (notification preferences) ---
@@ -166,6 +179,9 @@ service cloud.firestore {
 
       function isHouse() { return request.resource.data.kind == 'house'; }
       function isChallenge() { return request.resource.data.kind == 'challenge'; }
+      function isName(v) { return v is string && v.size() > 0; }
+      // whole golden footballs; the bound keeps Infinity/1e12 out of everyone's balances
+      function isStake(v) { return v is int && v > 0 && v <= 10000; }
 
       // House bets only while the current match has not had its first goal;
       // challenges any time while their matchup is the shared one.
@@ -177,37 +193,48 @@ service cloud.firestore {
             && request.resource.data.outcome.test is string
             && (
               (isHouse()
-                && request.resource.data.bettor is string
-                && request.resource.data.stake is number && request.resource.data.stake > 0
-                && request.resource.data.odds is number && request.resource.data.odds >= 1
+                && request.resource.data.keys().hasOnly(['kind', 'matchupKey', 'placedAt', 'outcome', 'void', 'bettor', 'stake', 'odds'])
+                && isName(request.resource.data.bettor)
+                && isStake(request.resource.data.stake)
+                // 10 = BETTING.oddsClamp max; winner odds must be the published ones
+                && request.resource.data.odds is number && request.resource.data.odds >= 1 && request.resource.data.odds <= 10
                 && currentMatch().firstGoalAt == null
-                && currentMatch().offer != null)
+                && currentMatch().offer != null
+                && (request.resource.data.outcome.test != 'winner'
+                  || request.resource.data.odds in currentMatch().offer.winner.values()))
               ||
               (isChallenge()
-                && request.resource.data.challenger is string
-                && (request.resource.data.opponent == null || request.resource.data.opponent is string)
-                && request.resource.data.challengerStake is number && request.resource.data.challengerStake > 0
-                && request.resource.data.opponentStake is number && request.resource.data.opponentStake > 0
+                && request.resource.data.keys().hasOnly(['kind', 'matchupKey', 'placedAt', 'outcome', 'void', 'challenger', 'opponent',
+                  'challengerStake', 'opponentStake', 'acceptedBy', 'acceptedAt'])
+                && isName(request.resource.data.challenger)
+                && (request.resource.data.opponent == null
+                  || (isName(request.resource.data.opponent) && request.resource.data.opponent != request.resource.data.challenger))
+                && isStake(request.resource.data.challengerStake)
+                && isStake(request.resource.data.opponentStake)
                 && request.resource.data.acceptedBy == null
                 && request.resource.data.acceptedAt == null)
             );
 
       allow update: if canAccess() && (
-            // undo / withdraw: only voiding, and a challenge only while unaccepted
+            // undo / withdraw: only voiding; a challenge only while unaccepted, a house bet only
+            // shortly after placing (UI undo window is BETTING.undoWindowMs = 5 s; 60 s is slack)
             (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['void'])
               && request.resource.data.void == true
-              && (resource.data.kind != 'challenge' || resource.data.acceptedBy == null))
+              && ((resource.data.kind == 'challenge' && resource.data.acceptedBy == null)
+                || (resource.data.kind == 'house' && request.time < resource.data.placedAt + duration.value(60, 's'))))
             ||
             // accept: once, not withdrawn, by the named opponent (or anyone), not the challenger
             (resource.data.kind == 'challenge'
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['acceptedBy', 'acceptedAt'])
               && resource.data.acceptedBy == null
               && resource.data.void == false
-              && request.resource.data.acceptedBy is string
+              && isName(request.resource.data.acceptedBy)
               && request.resource.data.acceptedBy != resource.data.challenger
               && (resource.data.opponent == null || request.resource.data.acceptedBy == resource.data.opponent)
               && request.resource.data.acceptedAt == request.time
-              && currentMatch().matchupKey == resource.data.matchupKey)
+              && currentMatch().matchupKey == resource.data.matchupKey
+              // posted before kick-off -> only until the first goal; posted mid-match -> any time
+              && (currentMatch().firstGoalAt == null || resource.data.placedAt > currentMatch().firstGoalAt))
           );
 
       allow delete: if false;

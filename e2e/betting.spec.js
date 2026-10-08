@@ -1,16 +1,7 @@
 // e2e/betting.spec.js
 // Two phones: A sets the lineup and runs live mode, B watches and bets.
 import { test, expect } from '@playwright/test';
-import { ensureTestUser, signInViaUI } from './helpers.js';
-
-// Emulator only: start from no shared match and no bets, so reruns are independent.
-const DOCS = 'http://127.0.0.1:7070/v1/projects/kickelo/databases/(default)/documents';
-const OWNER = { Authorization: 'Bearer owner' };
-async function resetBettingState() {
-  const { documents = [] } = await (await fetch(`${DOCS}/bets?pageSize=1000`, { headers: OWNER })).json();
-  const paths = [...documents.map((d) => d.name.split('/documents/')[1]), 'meta/currentMatch'];
-  await Promise.all(paths.map((p) => fetch(`${DOCS}/${p}`, { method: 'DELETE', headers: OWNER })));
-}
+import { ensureTestUser, signInViaUI, resetBettingState, DOCS, OWNER } from './helpers.js';
 
 test.beforeAll(async () => { await ensureTestUser(); });
 test.beforeEach(async () => { await resetBettingState(); });
