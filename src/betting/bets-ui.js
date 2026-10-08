@@ -8,6 +8,7 @@ import { getTeamRecord } from '../teams/team-service.js';
 import { showConfirm, showToast } from '../toast.js';
 import { createTimelineSVG, formatMsToMMSS } from '../match-timeline.js';
 import { BETTING, houseBetsActive } from './betting-config.js';
+import { describeOutcome } from './outcomes.js';
 import { resolveHouseBet, dayKey } from './ledger.js';
 import { getCurrentMatch } from './current-match-service.js';
 import { getBets, placeHouseBet, undoBet, available } from './bets-service.js';
@@ -71,10 +72,28 @@ function renderHouse(cm) {
     const btn = el('button', cls, `${side} wins ${odds}×`);
     btn.type = 'button';
     btn.disabled = closed || !odds;
-    btn.addEventListener('click', () => openBetSheet(pair, odds));
+    btn.addEventListener('click', () => openBetSheet({
+      outcome: { test: 'winner', team: pair, threshold: null }, odds, title: `${label(pair)} to win`,
+    }));
     buttons.appendChild(btn);
   }
-  row.append(buttons, el('div', 'bets-caption', closed ? 'Closed at first goal' : 'closes at first goal'));
+  row.appendChild(buttons);
+  for (const prop of cm.offer.props || []) {
+    const line = el('div', 'bets-prop');
+    line.appendChild(el('span', 'bets-prop-label', describeOutcome(prop.outcome, label)));
+    for (const [text, negate, odds] of [['Yes', false, prop.oddsYes], ['No', true, prop.oddsNo]]) {
+      const btn = el('button', 'bets-prop-btn', `${text} ${odds}×`);
+      btn.type = 'button';
+      btn.disabled = closed || !odds;
+      const outcome = { ...prop.outcome, negate };
+      btn.addEventListener('click', () => openBetSheet({
+        outcome: { ...outcome, propId: prop.id }, odds, title: describeOutcome(outcome, label),
+      }));
+      line.appendChild(btn);
+    }
+    row.appendChild(line);
+  }
+  row.appendChild(el('div', 'bets-caption', closed ? 'Closed at first goal' : 'closes at first goal'));
   return row;
 }
 
@@ -89,7 +108,7 @@ function renderFeed(cm) {
   for (const bet of bets) {
     const li = el('li');
     li.append(el('span', 'bets-feed-bettor', bet.bettor), footballs(bet.stake),
-      el('span', null, ` on ${label(bet.outcome?.team)} @${bet.odds}`));
+      el('span', null, `${describeOutcome(bet.outcome, label)} @${bet.odds}`));
     const r = resolveHouseBet(bet, allMatches || [], now);
     if (r.status !== 'open') {
       const text = r.status === 'won' ? `won ${r.payout}` : r.status;
@@ -108,9 +127,9 @@ function saveBettor(name) {
   try { localStorage.setItem(BETTOR_KEY, name); } catch { /* storage unavailable */ }
 }
 
-async function openBetSheet(team, odds) {
+async function openBetSheet({ outcome, odds, title }) {
   const sheet = el('div', 'bet-sheet');
-  sheet.appendChild(el('div', 'bet-sheet-title', `${label(team)} to win @${odds}`));
+  sheet.appendChild(el('div', 'bet-sheet-title', `${title} @${odds}`));
 
   const bettorSelect = el('select', 'bet-sheet-bettor');
   bettorSelect.appendChild(new Option('Who is betting?', ''));
@@ -154,7 +173,7 @@ async function openBetSheet(team, odds) {
   }
   saveBettor(bettor);
   try {
-    const id = await placeHouseBet({ bettor, stake, outcome: { test: 'winner', team } });
+    const id = await placeHouseBet({ bettor, stake, outcome });
     showToast('Bet placed — tap to undo', 'success', BETTING.undoWindowMs, () => {
       undoBet(id).catch((err) => { console.warn('[betting] undo failed', err); showToast('Undo failed', 'error'); });
     });

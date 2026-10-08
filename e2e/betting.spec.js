@@ -175,3 +175,27 @@ test('a burst of lineup events asks once and a decline is remembered', async ({ 
   await expect(a.locator('#betsNotShared')).toBeHidden();
   await ctx.close();
 });
+
+test('house props: at most count rows, a "No" bet shows on both feeds', async ({ browser }) => {
+  const { ctx: ctxA, page: a } = await openPhone(browser);
+  const { ctx: ctxB, page: b } = await openPhone(browser);
+  const names = await playerNames(a);
+  await pickLineup(a, names.slice(0, 4));
+
+  const box = b.locator('#betsBox');
+  await expect(box.locator('button', { hasText: 'wins' })).toHaveCount(2, { timeout: 10000 });
+  const rows = box.locator('.bets-prop');
+  const n = await rows.count();
+  expect(n).toBeLessThanOrEqual(2);
+  if (n > 0) {
+    const desc = await rows.first().locator('.bets-prop-label').textContent();
+    await rows.first().locator('.bets-prop-btn', { hasText: 'No' }).click();
+    await b.locator('.confirm-dialog select.bet-sheet-bettor').selectOption(names[1]);
+    await b.locator('.confirm-dialog input[type=number]').fill('5');
+    await b.locator('.confirm-btn-ok').click();
+    await expect(box.locator('.bets-feed')).toContainText(`Not: ${desc}`);
+    await expect(a.locator('#betsBox .bets-feed')).toContainText(`Not: ${desc}`);
+  }
+  await ctxA.close();
+  await ctxB.close();
+});
