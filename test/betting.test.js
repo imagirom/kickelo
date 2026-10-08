@@ -6,6 +6,7 @@ import { goalProbability, scorelineDistribution, winProbability, toOdds, logLike
 import { dayKey, firstGoalAt, resolveHouseBet, computeBalances, checkBet } from '../src/betting/ledger.js';
 import { shouldClearAfterSubmit, buildOffer, shouldPublishLineup, needsOverwriteConfirm, goalUpdate, isLiveTakeover, ownsLive, showNotSharedHint, liveClaimUpdate } from '../src/betting/current-match.js';
 import params from '../src/betting/model-params.json' with { type: 'json' };
+import { OUTCOME_TESTS, evaluateOutcome, describeOutcome } from '../src/betting/outcomes.js';
 
 let passed = 0;
 let failed = 0;
@@ -210,6 +211,40 @@ console.log('\n=== live claim ===');
   assertEq(liveClaimUpdate({ ...cur, firstGoalAt: 5 }, 'A::B|C::D', goals), { goalLog: goals }, 'closed betting is never moved later');
   assertEq(liveClaimUpdate({ ...cur, firstGoalAt: 5 }, 'A::B|C::D', []), { goalLog: [] }, 'takeover never reopens betting');
   assertEq(liveClaimUpdate({ matchupKey: 'X::Y|Z::W', firstGoalAt: 5 }, 'A::B|C::D', goals), { goalLog: goals, firstGoalAt: 'SERVER' }, 'stale doc of another matchup -> stamp');
+}
+
+console.log('\n=== outcome tests ===');
+{
+  const R = ['Manuel', 'Marc']; const B = ['Roman', 'Tobi'];
+  const g = (seq) => seq.split('').map((c, i) => ({ team: c === 'r' ? 'red' : 'blue', timestamp: (i + 1) * 10000 }));
+  // red falls behind 0:2 then wins 5:3
+  const m = { teamA: R, teamB: B, winner: 'A', goalsA: 5, goalsB: 3, matchDuration: 275000, goalLog: g('bbrrrbrr') };
+  const o = (test, extra = {}) => ({ test, team: null, threshold: null, ...extra });
+  assertEq(evaluateOutcome(m, o('winner', { team: R })), true, 'winner: red pair won');
+  assertEq(evaluateOutcome({ ...m, teamA: B, teamB: R, winner: 'B', goalLog: g('rrbbbrbb') }, o('winner', { team: R })), true, 'winner follows the pair across a side swap');
+  assertEq(evaluateOutcome(m, o('marginAtLeast', { team: R, threshold: 2 })), true, 'margin 2 reached');
+  assertEq(evaluateOutcome(m, o('marginAtLeast', { team: R, threshold: 3 })), false, 'margin 3 not reached');
+  assertEq(evaluateOutcome(m, o('marginAtLeast', { team: B, threshold: 2 })), false, 'loser never has a margin');
+  assertEq(evaluateOutcome({ ...m, goalsB: 0 }, o('shutout', { team: R })), true, 'shutout');
+  assertEq(evaluateOutcome(m, o('goesToFourFour')), false, '5:3 did not reach 4:4');
+  assertEq(evaluateOutcome({ ...m, goalsB: 4 }, o('goesToFourFour')), true, '5:4 reached 4:4');
+  assertEq(evaluateOutcome(m, o('durationOver', { threshold: 270 })), true, '4:35 is over 4:30');
+  assertEq(evaluateOutcome(m, o('durationOver', { threshold: 300 })), false, '4:35 is not over 5:00');
+  assertEq(evaluateOutcome(m, o('scoresFirst', { team: B })), true, 'blue scored first');
+  assertEq(evaluateOutcome(m, o('firstScorerWins')), false, 'first scorer lost');
+  assertEq(evaluateOutcome(m, o('comebackAtLeast', { team: R, threshold: 2 })), true, 'comeback from 2 down');
+  assertEq(evaluateOutcome(m, o('comebackAtLeast', { team: R, threshold: 3 })), false, 'not from 3 down');
+  assertEq(evaluateOutcome(m, o('marginAtLeast', { team: R, threshold: 3, negate: true })), true, 'negation flips');
+  const noLog = { ...m, goalLog: undefined, matchDuration: undefined };
+  assertEq(evaluateOutcome(noLog, o('scoresFirst', { team: R })), null, 'goal-order test without goalLog -> null');
+  assertEq(evaluateOutcome(noLog, o('durationOver', { threshold: 270, negate: true })), null, 'negated test without data stays null');
+  assertEq(evaluateOutcome(noLog, o('marginAtLeast', { team: R, threshold: 2 })), true, 'scoreline tests work without goalLog');
+  assertEq(evaluateOutcome(m, o('winner', { team: ['Peter', 'Paul'] })), null, 'team not in match -> null');
+  assertEq(OUTCOME_TESTS.map((t) => t.id), ['winner', 'marginAtLeast', 'shutout', 'goesToFourFour', 'durationOver', 'scoresFirst', 'firstScorerWins', 'comebackAtLeast'], 'catalog order');
+  const lab = (p) => (p[0] === 'Manuel' ? 'MaMa' : p.join(' + '));
+  assertEq(describeOutcome(o('marginAtLeast', { team: R, threshold: 3 }), lab), 'MaMa win by 3+', 'describe margin');
+  assertEq(describeOutcome(o('durationOver', { threshold: 270 }), lab), 'Over 4:30', 'describe duration');
+  assertEq(describeOutcome(o('goesToFourFour', { negate: true }), lab), 'Not: Goes to 4:4', 'describe negation');
 }
 
 // --- further sections are appended by later tasks above this line ---
