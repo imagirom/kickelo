@@ -5,10 +5,13 @@ import { OUTCOME_TESTS } from './outcomes.js';
 import { outcomeProbability } from './model.js';
 import { teamKey } from '../teams/team-identity.js';
 
-export function candidateProps(red, blue, gap, params) {
+export function candidateProps(red, blue, gap, params, opts = { minSamples: 0 }) {
   const out = [];
+  const min = opts.minSamples || 0;
+  if (params.samples?.scoreline < min) return out;
   for (const def of OUTCOME_TESTS) {
     if (def.id === 'winner' || params.excluded?.includes(def.id)) continue;
+    if (def.needsGoalLog && params.samples?.goalLog < min) continue;
     const teams = def.hasTeam ? [[red, gap], [blue, -gap]] : [[null, gap]];
     for (const [team, g] of teams) {
       for (const threshold of def.thresholds || [null]) {

@@ -12,7 +12,7 @@ export function buildOffer(red, blue, eloOf, params, cfg, seed = '') {
   const gap = avg(red, eloOf) - avg(blue, eloOf);
   const pRed = winProbability(gap, params);
   const props = propsActive(cfg)
-    ? drawProps(eligible(candidateProps(red, blue, gap, params), cfg.houseProps.maxRatio), cfg.houseProps.count, seed)
+    ? drawProps(eligible(candidateProps(red, blue, gap, params, { minSamples: cfg.houseProps.minSamples }), cfg.houseProps.maxRatio), cfg.houseProps.count, seed)
         .map(({ id, outcome, p }) => ({ id, outcome, oddsYes: toOdds(p, cfg), oddsNo: toOdds(1 - p, cfg) }))
     : [];
   return {

@@ -48,13 +48,26 @@ export function available(bettor) {
   return (w?.balance ?? 0) + (hasBetToday ? 0 : BETTING.dailyAllowance);
 }
 
-export async function placeHouseBet({ bettor, stake, team }) {
+/** outcome: { test, team, threshold?, negate?, propId? }; propId (prop bets) is only used to look up odds. */
+export async function placeHouseBet({ bettor, stake, outcome }) {
   const cm = getCurrentMatch();
   if (!cm?.offer || cm.firstGoalAt) throw new Error('closed');
-  const odds = cm.offer.winner[teamKey(team)];
+  const { propId, ...rest } = outcome;
+  let odds;
+  if (rest.test === 'winner') {
+    odds = cm.offer.winner[teamKey(rest.team)];
+  } else {
+    const prop = (cm.offer.props || []).find((pr) => pr.id === propId);
+    if (!prop) throw new Error('closed');
+    odds = rest.negate ? prop.oddsNo : prop.oddsYes;
+  }
   const bet = {
     kind: 'house', matchupKey: cm.matchupKey, bettor, stake, odds,
-    outcome: { test: 'winner', team: [...team].sort() }, void: false,
+    outcome: {
+      test: rest.test, team: rest.team ? [...rest.team].sort() : null,
+      threshold: rest.threshold ?? null, negate: Boolean(rest.negate),
+    },
+    void: false,
   };
   const verdict = checkBet(bet, { currentMatch: cm });
   if (!verdict.ok) throw new Error(verdict.reason);

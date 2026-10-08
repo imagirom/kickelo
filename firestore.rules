@@ -175,6 +175,7 @@ service cloud.firestore {
             && request.resource.data.matchupKey is string
             && request.resource.data.placedAt == request.time
             && request.resource.data.void == false
+            && request.resource.data.outcome.test is string
             && request.resource.data.matchupKey == currentMatch().matchupKey
             && currentMatch().firstGoalAt == null
             && currentMatch().offer != null;

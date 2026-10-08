@@ -154,7 +154,7 @@ async function openBetSheet(team, odds) {
   }
   saveBettor(bettor);
   try {
-    const id = await placeHouseBet({ bettor, stake, team });
+    const id = await placeHouseBet({ bettor, stake, outcome: { test: 'winner', team } });
     showToast('Bet placed — tap to undo', 'success', BETTING.undoWindowMs, () => {
       undoBet(id).catch((err) => { console.warn('[betting] undo failed', err); showToast('Undo failed', 'error'); });
     });

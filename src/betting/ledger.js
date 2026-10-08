@@ -3,7 +3,7 @@
 // balances are recomputed from bets + matches, so match edits/deletes flow through.
 import { BETTING } from './betting-config.js';
 import { matchupKey } from './matchup.js';
-import { teamKey } from '../teams/team-identity.js';
+import { evaluateOutcome } from './outcomes.js';
 
 export function dayKey(ms) {
   const d = new Date(ms);
@@ -29,10 +29,6 @@ function findMatch(bet, matches) {
   return best;
 }
 
-function winnerPair(match) {
-  return match.winner === 'A' ? match.teamA : match.teamB;
-}
-
 export function resolveHouseBet(bet, matches, now) {
   const match = findMatch(bet, matches);
   if (!match) {
@@ -43,8 +39,9 @@ export function resolveHouseBet(bet, matches, now) {
   }
   const fg = firstGoalAt(match);
   if (fg === null || bet.placedAt >= fg) return { status: 'refunded', matchId: match.id, payout: bet.stake };
-  const won = teamKey(winnerPair(match)) === teamKey(bet.outcome.team);
-  return won
+  const result = evaluateOutcome(match, bet.outcome);
+  if (result === null) return { status: 'refunded', matchId: match.id, payout: bet.stake };
+  return result
     ? { status: 'won', matchId: match.id, payout: Math.round(bet.stake * bet.odds) }
     : { status: 'lost', matchId: match.id, payout: 0 };
 }

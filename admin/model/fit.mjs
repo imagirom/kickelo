@@ -7,6 +7,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeAllPlayerStats } from '../../src/player-stats-batch.js';
 import { logLikelihood, winProbability, scorelineDistribution } from '../../src/betting/model.js';
+import { evaluateOutcome } from '../../src/betting/outcomes.js';
+import { candidateProps } from '../../src/betting/props.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const backupPath = process.argv[2] || (() => {
@@ -41,7 +43,7 @@ function preElo(player, ts) {
 const rows = matches.slice().reverse().map((m) => {
   const a = (preElo(m.teamA[0], m.timestamp) + preElo(m.teamA[1], m.timestamp)) / 2;
   const b = (preElo(m.teamB[0], m.timestamp) + preElo(m.teamB[1], m.timestamp)) / 2;
-  return { gap: a - b, goalsFor: m.goalsA, goalsAgainst: m.goalsB, timestamp: m.timestamp };
+  return { gap: a - b, goalsFor: m.goalsA, goalsAgainst: m.goalsB, timestamp: m.timestamp, match: m };
 });
 const burnIn = Math.floor(rows.length * 0.1);
 const usable = rows.slice(burnIn);
@@ -112,7 +114,81 @@ function marginTable(params, data) {
   return pred.map((p, i) => `| ${i + 1} | ${(p / data.length).toFixed(3)} | ${(obs[i] / data.length).toFixed(3)} |`).join('\n');
 }
 
-const out = { ...fitAll, fittedAt: new Date().toISOString(), n: usable.length, trainN: train.length, testN: test.length };
+// --- Props: duration model, per-prop backtest, exclusion ---
+const isLive = (r) => Array.isArray(r.match.goalLog) && r.match.goalLog.length > 0 && typeof r.match.matchDuration === 'number';
+
+// ln(seconds) = a + b*|gap| + eps, OLS on live matches with 30 s < duration < 30 min.
+function fitDuration(data) {
+  const pts = data.filter(isLive).map((r) => [Math.abs(r.gap), r.match.matchDuration / 1000])
+    .filter(([, sec]) => sec > 30 && sec < 1800).map(([x, sec]) => [x, Math.log(sec)]);
+  const n = pts.length;
+  const mx = pts.reduce((s, [x]) => s + x, 0) / n;
+  const my = pts.reduce((s, [, y]) => s + y, 0) / n;
+  const sxx = pts.reduce((s, [x]) => s + (x - mx) ** 2, 0);
+  const b = pts.reduce((s, [x, y]) => s + (x - mx) * (y - my), 0) / sxx;
+  const a = my - b * mx;
+  const sigma = Math.sqrt(pts.reduce((s, [x, y]) => s + (y - a - b * x) ** 2, 0) / (n - 2));
+  return { a, b, sigma, n };
+}
+const durationTrain = fitDuration(train);
+const durationAll = fitDuration(usable);
+
+// Observations per family (test:threshold): p from the train-fitted model, y from the logged match.
+function observations(params, data) {
+  const fam = new Map();
+  for (const r of data) {
+    for (const c of candidateProps(r.match.teamA, r.match.teamB, r.gap, params)) {
+      const y = evaluateOutcome(r.match, c.outcome);
+      if (y === null) continue;
+      const key = `${c.outcome.test}:${c.outcome.threshold ?? '-'}`;
+      if (!fam.has(key)) fam.set(key, []);
+      const gapTeam = c.outcome.team ? (c.outcome.team.join() === [...r.match.teamA].sort().join() ? r.gap : -r.gap) : r.gap;
+      fam.get(key).push({ p: c.p, y: y ? 1 : 0, x: gapTeam / 400 });
+    }
+  }
+  return fam;
+}
+// One-feature logistic regression logit p = w0 + w1*x, Newton's method.
+function fitLogistic(obs) {
+  let w0 = 0; let w1 = 0;
+  for (let it = 0; it < 20; it++) {
+    let g0 = 0; let g1 = 0; let h00 = 1e-9; let h01 = 0; let h11 = 1e-9;
+    for (const { x, y } of obs) {
+      const p = 1 / (1 + Math.exp(-(w0 + w1 * x)));
+      const w = p * (1 - p);
+      g0 += y - p; g1 += (y - p) * x;
+      h00 += w; h01 += w * x; h11 += w * x * x;
+    }
+    const det = h00 * h11 - h01 * h01;
+    w0 += (h11 * g0 - h01 * g1) / det;
+    w1 += (h00 * g1 - h01 * g0) / det;
+  }
+  return (x) => 1 / (1 + Math.exp(-(w0 + w1 * x)));
+}
+const trainParams = { ...fitTrain, duration: durationTrain };
+const famTrain = observations(trainParams, train);
+const famTest = observations(trainParams, test);
+const families = [...famTest.keys()].sort().map((key) => {
+  const tr = famTrain.get(key) || [];
+  const te = famTest.get(key);
+  const base = tr.length ? tr.reduce((s, o) => s + o.y, 0) / tr.length : 0.5;
+  const logistic = fitLogistic(tr);
+  const n = te.length;
+  const sum = (f) => te.reduce((s, o) => s + f(o), 0);
+  return {
+    key, test: key.split(':')[0], n,
+    meanP: sum((o) => o.p) / n, rate: sum((o) => o.y) / n,
+    sse: sum((o) => (o.p - o.y) ** 2), sseBase: sum((o) => (base - o.y) ** 2), sseLogit: sum((o) => (logistic(o.x) - o.y) ** 2),
+  };
+});
+const excluded = [...new Set(families.map((f) => f.test))].filter((t) => {
+  const fs_ = families.filter((f) => f.test === t);
+  const n = fs_.reduce((s, f) => s + f.n, 0);
+  const tot = (k) => fs_.reduce((s, f) => s + f[k], 0) / n;
+  return tot('sse') > tot('sseBase') + 0.005 || tot('sse') > tot('sseLogit') + 0.01;
+});
+
+const out = { ...fitAll, duration: durationAll, samples: { scoreline: usable.length, goalLog: usable.filter(isLive).length }, excluded, fittedAt: new Date().toISOString(), n: usable.length, trainN: train.length, testN: test.length };
 fs.writeFileSync(path.join(ROOT, 'src/betting/model-params.json'), JSON.stringify(out, null, 2) + '\n');
 
 const report = `# Winner model report
@@ -140,6 +216,27 @@ ${ev.bins.map((b, i) => `| ${(0.5 + i / 10).toFixed(1)}–${(0.6 + i / 10).toFix
 ${marginTable(fitTrain, test)}
 
 Note: the client prices with season-cache ELO; at a season start gaps are small and odds near even.
+
+## Props
+
+Samples: scoreline ${out.samples.scoreline}, goal log ${out.samples.goalLog}.
+
+### Duration (ln seconds = a + b·|gap| + ε; live matches 30 s – 30 min)
+| fit | a | b | sigma | n | median at gap 0 |
+|---|---|---|---|---|---|
+| shipped (all) | ${durationAll.a.toFixed(4)} | ${durationAll.b.toExponential(3)} | ${durationAll.sigma.toFixed(4)} | ${durationAll.n} | ${Math.round(Math.exp(durationAll.a))} s |
+| train | ${durationTrain.a.toFixed(4)} | ${durationTrain.b.toExponential(3)} | ${durationTrain.sigma.toFixed(4)} | ${durationTrain.n} | ${Math.round(Math.exp(durationTrain.a))} s |
+
+### Per-prop backtest (fit on train, evaluated on test; both team sides pooled)
+| family | n | mean p | observed | Brier model | Brier base rate | Brier logistic |
+|---|---|---|---|---|---|---|
+${families.map((f) => `| ${f.key} | ${f.n} | ${f.meanP.toFixed(3)} | ${f.rate.toFixed(3)} | ${(f.sse / f.n).toFixed(4)} | ${(f.sseBase / f.n).toFixed(4)} | ${(f.sseLogit / f.n).toFixed(4)} |`).join('\n')}
+
+Excluded from offers: ${excluded.length ? excluded.join(', ') : 'none'}.
+
+Rule: a test is excluded if, over its families pooled, the model's test Brier exceeds the base-rate Brier by
+more than 0.005 or the logistic benchmark's by more than 0.01. Spec deviation: instead of switching such a
+prop to the benchmark model it is simply not offered (simpler, and safe).
 `;
 fs.mkdirSync(path.join(ROOT, 'admin/model'), { recursive: true });
 fs.writeFileSync(path.join(ROOT, 'admin/model/report.md'), report);

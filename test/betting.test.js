@@ -304,6 +304,32 @@ console.log('\n=== props ===');
   assertEq(Object.keys(off.winner).length, 2, 'winner odds unaffected');
 }
 
+console.log('\n=== prop bets in the ledger ===');
+{
+  const day = new Date(2026, 9, 8, 12).getTime();
+  const R = ['Manuel', 'Marc']; const B = ['Roman', 'Tobi'];
+  const m = { id: 'p1', timestamp: day + 300000, teamA: R, teamB: B, winner: 'A', goalsA: 5, goalsB: 1,
+    matchDuration: 240000, goalLog: [{ team: 'red', timestamp: 30000 }] };
+  const bet = (outcome) => ({ kind: 'house', matchupKey: 'Manuel::Marc|Roman::Tobi', placedAt: day, bettor: 'S', stake: 10, odds: 2, outcome, void: false });
+  assertEq(resolveHouseBet(bet({ test: 'marginAtLeast', team: R, threshold: 3 }), [m], day + 400000).status, 'won', 'margin prop wins');
+  assertEq(resolveHouseBet(bet({ test: 'marginAtLeast', team: R, threshold: 3, negate: true }), [m], day + 400000).status, 'lost', 'negated side loses');
+  assertEq(resolveHouseBet(bet({ test: 'durationOver', team: null, threshold: 300 }), [{ ...m, matchDuration: undefined }], day + 400000).status, 'refunded', 'missing data -> refund');
+  assertEq(resolveHouseBet(bet({ test: 'winner', team: R }), [m], day + 400000).payout, 20, 'phase-1 winner bets unchanged');
+}
+
+console.log('\n=== candidateProps minSamples gate ===');
+{
+  const P = { ...params, duration: { a: 5.5, b: 0, sigma: 0.35, n: 100 } };
+  const red = ['A', 'B']; const blue = ['C', 'D'];
+  const tests = (ps) => new Set(candidateProps(red, blue, 0, ps, { minSamples: 30 }).map((c) => c.outcome.test));
+  assertEq(tests({ ...P, samples: { scoreline: 100, goalLog: 100 } }).has('durationOver'), true, 'enough samples -> goal-log props');
+  const few = tests({ ...P, samples: { scoreline: 100, goalLog: 10 } });
+  assertEq(few.has('durationOver') || few.has('scoresFirst'), false, 'few goal logs -> no goal-log props');
+  assertEq(few.has('marginAtLeast'), true, 'scoreline props kept');
+  assertEq(tests({ ...P, samples: { scoreline: 10, goalLog: 10 } }).size, 0, 'few matches -> no props');
+  assertEq(candidateProps(red, blue, 0, P).some((c) => c.outcome.test === 'durationOver'), true, 'default opts: no gate');
+}
+
 // --- further sections are appended by later tasks above this line ---
 
 console.log('\n' + '='.repeat(60));
