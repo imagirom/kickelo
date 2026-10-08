@@ -8,7 +8,7 @@ export const BETTING = {
   challenges: true,                                                       // phase 3
   margin: 0.05,
   oddsClamp: [1.05, 10],
-  dailyAllowance: 100,
+  dailyAllowance: 20,
   undoWindowMs: 5000,
   maxStake: 10000,        // also enforced in firestore.rules (isStake)
   stakeChips: [5, 10, 25],

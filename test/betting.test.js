@@ -127,14 +127,14 @@ console.log('\n=== ledger ===');
     bet(day, { bettor: 'Peter', void: true }),  // ignored entirely
   ];
   const bal = computeBalances(bets, [m1], day + 400000);
-  assertEq(bal.get('Simon').balance, 100 - 20 + 38 - 20 + 20, 'Simon: allowance, win, refund');
-  assertEq(bal.get('Marc').balance, 90, 'Marc: allowance minus lost stake');
+  assertEq(bal.get('Simon').balance, BETTING.dailyAllowance - 20 + 38 - 20 + 20, 'Simon: allowance, win, refund');
+  assertEq(bal.get('Marc').balance, BETTING.dailyAllowance - 10, 'Marc: allowance minus lost stake');
   assertEq(bal.has('Peter'), false, 'void-only bettor has no wallet');
   assertEq(bal.get('Simon').todayDelta, 18, 'todayDelta excludes allowance: +18 net from bets');
   const open = computeBalances([bet(day)], [], day + 1000);
-  assertEq(open.get('Simon'), { balance: 80, todayDelta: -20, open: 1 }, 'open bet: stake held');
+  assertEq(open.get('Simon'), { balance: BETTING.dailyAllowance - 20, todayDelta: -20, open: 1 }, 'open bet: stake held');
   const twoDays = computeBalances([bet(day), bet(day + 24 * 3600 * 1000)], [], day + 3 * 24 * 3600 * 1000);
-  assertEq(twoDays.get('Simon').balance, 200, 'two days of allowance, both refunded');
+  assertEq(twoDays.get('Simon').balance, 2 * BETTING.dailyAllowance, 'two days of allowance, both refunded');
   assertEq(dayKey(day + 3600 * 1000), dayKey(day), 'dayKey groups by local day');
 
   assertEq(checkBet(bet(day), {}), { ok: true }, 'checkBet allows everything for now');
@@ -361,10 +361,10 @@ console.log('\n=== challenges in the ledger ===');
   assertEq(resolveChallenge(ch({ acceptedBy: 'Peter', acceptedAt: day + 400000 }), [{ ...m, goalLog: undefined }], day + 700000).status, 'won', 'no goal log -> only the logging time cuts off');
 
   const bal = computeBalances([ch(acc)], [m], day + 700000);
-  assertEq(bal.get('Simon').balance, 100 - 10 + 40, 'challenger balance after a win');
-  assertEq(bal.get('Peter').balance, 100 - 30, 'acceptor balance after a loss (allowance counted)');
+  assertEq(bal.get('Simon').balance, BETTING.dailyAllowance - 10 + 40, 'challenger balance after a win');
+  assertEq(bal.get('Peter').balance, BETTING.dailyAllowance - 30, 'acceptor balance after a loss (allowance counted)');
   const open = computeBalances([ch()], [], day + 1000);
-  assertEq(open.get('Simon'), { balance: 90, todayDelta: -10, open: 1 }, 'open challenge holds the challenger stake');
+  assertEq(open.get('Simon'), { balance: BETTING.dailyAllowance - 10, todayDelta: -10, open: 1 }, 'open challenge holds the challenger stake');
   assertEq(open.has('Peter'), false, 'no acceptor yet -> no wallet');
   assertEq(computeBalances([ch({ void: true })], [], day + 1000).size, 0, 'withdrawn challenge ignored');
 }
@@ -426,7 +426,7 @@ console.log('\n=== balances over many matches (indexed) ===');
   const bets = Array.from({ length: 3000 }, (_, i) => ({ kind: 'house', matchupKey: 'Manuel::Marc|Roman::Tobi', placedAt: day - 200000, bettor: `B${i % 10}`, stake: 1, odds: 2, outcome: { test: 'winner', team: R }, void: false }));
   const t0 = Date.now();
   const bal = computeBalances(bets, [...filler, m], day + 2000);
-  assertEq(bal.get('B0').balance, 100 + 300, 'every bet resolved against the indexed match');
+  assertEq(bal.get('B0').balance, BETTING.dailyAllowance + 300, 'every bet resolved against the indexed match');
   assertEq(Date.now() - t0 < 500, true, '3,000 bets x 2,000 matches well under a second');
 }
 
@@ -455,7 +455,7 @@ console.log('\n=== locked-in challenges ===');
   assertEq(resolveChallenge(lock, [], day + 1000).status, 'pending', 'locked in before the match -> pending, both stakes held');
   assertEq(resolveChallenge(lock, [m], day + 700000).challengerPayout, 40, 'locked-in challenge settles like an accepted one');
   const bal = computeBalances([lock], [], day + 1000);
-  assertEq([bal.get('Simon').balance, bal.get('Peter').balance], [90, 70], 'both stakes held from posting, allowance for both');
+  assertEq([bal.get('Simon').balance, bal.get('Peter').balance], [BETTING.dailyAllowance - 10, BETTING.dailyAllowance - 30], 'both stakes held from posting, allowance for both');
 }
 
 // --- further sections are appended by later tasks above this line ---

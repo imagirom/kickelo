@@ -70,7 +70,7 @@ export const BETTING = {
   challenges: true,
   margin: 0.05,             // house margin on fixed odds
   oddsClamp: [1.05, 10],
-  dailyAllowance: 100,
+  dailyAllowance: 20,
   undoWindowMs: 5000,
 };
 ```

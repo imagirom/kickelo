@@ -213,11 +213,11 @@ test('challenges: one of two concurrent accepts wins, withdraw hides Accept', as
     await dlg.locator('button', { hasText: 'I bet against' }).click();
     await expect(dlg.locator('.challenge-preview')).toHaveText("Doesn't go to 4:4");
     await dlg.locator('input.challenge-my-stake').fill(String(myStake));
-    await dlg.locator('input.challenge-their-stake').fill('30');
+    await dlg.locator('input.challenge-their-stake').fill('15');
     await a.locator('.confirm-btn-ok').click();
   }
   await postChallenge(10);
-  const line = (p, stake) => p.locator('#betsBox .bets-feed li', { hasText: `${stake} vs 30` });
+  const line = (p, stake) => p.locator('#betsBox .bets-feed li', { hasText: `${stake} vs 15` });
   await expect(line(b, 10)).toContainText(`${names[4]} → anyone`);
   await expect(line(c, 10).locator('button', { hasText: 'Accept' })).toBeVisible();
 
