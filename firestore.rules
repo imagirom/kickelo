@@ -211,8 +211,11 @@ service cloud.firestore {
                   || (isName(request.resource.data.opponent) && request.resource.data.opponent != request.resource.data.challenger))
                 && isStake(request.resource.data.challengerStake)
                 && isStake(request.resource.data.opponentStake)
-                && request.resource.data.acceptedBy == null
-                && request.resource.data.acceptedAt == null)
+                // open to accept, or locked in straight away with the named opponent
+                && ((request.resource.data.acceptedBy == null && request.resource.data.acceptedAt == null)
+                  || (request.resource.data.opponent != null
+                    && request.resource.data.acceptedBy == request.resource.data.opponent
+                    && request.resource.data.acceptedAt == request.time)))
             );
 
       allow update: if canAccess() && (
@@ -220,7 +223,10 @@ service cloud.firestore {
             // shortly after placing (UI undo window is BETTING.undoWindowMs = 5 s; 60 s is slack)
             (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['void'])
               && request.resource.data.void == true
-              && ((resource.data.kind == 'challenge' && resource.data.acceptedBy == null)
+              && ((resource.data.kind == 'challenge'
+                  && (resource.data.acceptedBy == null
+                    || (resource.data.acceptedAt == resource.data.placedAt
+                      && request.time < resource.data.placedAt + duration.value(60, 's'))))
                 || (resource.data.kind == 'house' && request.time < resource.data.placedAt + duration.value(60, 's'))))
             ||
             // accept: once, not withdrawn, by the named opponent (or anyone), not the challenger

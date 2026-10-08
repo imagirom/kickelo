@@ -304,6 +304,42 @@ test('declining a takeover or a replace keeps live mode off on this phone', asyn
   await ctxB.close();
 });
 
+test('a challenge to a named player locks in straight away; oversized stakes say why', async ({ browser }) => {
+  const { ctx: ctxA, page: a } = await openPhone(browser);
+  const { ctx: ctxB, page: b } = await openPhone(browser);
+  const names = await playerNames(a);
+  await pickLineup(a, names.slice(0, 4));
+  const open = async (opponent, theirs) => {
+    await a.locator('#betsBox .bets-challenge-btn').click();
+    const dlg = a.locator('.confirm-dialog');
+    await dlg.locator('select.challenge-challenger').selectOption(names[4]);
+    await dlg.locator('select.challenge-opponent').selectOption(opponent);
+    await dlg.locator('input.challenge-their-stake').fill(String(theirs));
+    return dlg;
+  };
+  // opponent can't cover the stake -> named, readable message (not "closed")
+  let dlg = await open(names[5], 5000);
+  await expect(dlg.locator('.confirm-btn-ok')).toHaveText('Lock in');
+  await expect(dlg).toContainText('Locks in straight away');
+  await dlg.locator('.confirm-btn-ok').click();
+  await expect(a.locator('.toast-message', { hasText: `${names[5]} doesn't have enough golden footballs` })).toBeVisible();
+  // over the stake cap -> cap message
+  await expect(a.locator('.confirm-dialog')).toHaveCount(0);
+  dlg = await open('', 20000);
+  await expect(dlg.locator('.confirm-btn-ok')).toHaveText('Post challenge');
+  await dlg.locator('.confirm-btn-ok').click();
+  await expect(a.locator('.toast-message', { hasText: 'Stakes are limited to 10000' })).toBeVisible();
+  // affordable -> locked in on every phone, no Accept step
+  await expect(a.locator('.confirm-dialog')).toHaveCount(0);
+  dlg = await open(names[5], 20);
+  await dlg.locator('.confirm-btn-ok').click();
+  const line = b.locator('#betsBox .bets-feed li.bets-feed-challenge', { hasText: `${names[4]} → ${names[5]}` });
+  await expect(line).toContainText('locked in', { timeout: 10000 });
+  await expect(line.locator('button', { hasText: 'Accept' })).toHaveCount(0);
+  await ctxA.close();
+  await ctxB.close();
+});
+
 async function matchesSince(ms) {
   const res = await fetch(`${DOCS}:runQuery`, { method: 'POST', headers: OWNER, body: JSON.stringify({ structuredQuery: {
     from: [{ collectionId: 'matches' }],
@@ -325,7 +361,7 @@ test('pre-match challenges close at the first goal; results stay visible after t
     const names = await playerNames(a);
     await pickLineup(a, names.slice(0, 4));
     const box = b.locator('#betsBox');
-    await expect(box).toContainText('counts only if the match is scored in live mode', { timeout: 10000 });
+    await expect(box).toContainText('live mode only', { timeout: 10000 });
 
     await box.locator('button', { hasText: 'Red wins' }).click();
     await b.locator('.confirm-dialog select.bet-sheet-bettor').selectOption(names[1]);

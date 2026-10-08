@@ -10,7 +10,7 @@ import { showConfirm, showToast } from '../toast.js';
 import { createTimelineSVG, formatMsToMMSS } from '../match-timeline.js';
 import { BETTING, houseBetsActive } from './betting-config.js';
 import { describeOutcome, OUTCOME_TESTS, mmss } from './outcomes.js';
-import { resolveHouseBet, resolveChallenge, dayKey } from './ledger.js';
+import { isLockedIn, resolveHouseBet, resolveChallenge, dayKey } from './ledger.js';
 import { getCurrentMatch } from './current-match-service.js';
 import { getBets, placeHouseBet, undoBet, available, placeChallenge, acceptChallenge, withdrawChallenge } from './bets-service.js';
 import { footballs, GF_ICON_SRC } from './currency.js';
@@ -34,7 +34,8 @@ function renderHeader(cm) {
   const icon = el('img', 'gf-icon gf-shine bets-header-icon');
   icon.src = GF_ICON_SRC;
   icon.alt = '';
-  row.append(el('span', 'live-team-label red', label(cm.red)), icon, el('span', 'live-team-label blue', label(cm.blue)));
+  row.append(el('span', 'live-team-label red bets-header-red', label(cm.red)), icon,
+    el('span', 'live-team-label blue bets-header-blue', label(cm.blue)));
   return row;
 }
 
@@ -109,7 +110,7 @@ function renderHouse(cm) {
   // Only the live-scoring phone writes goals: without live mode the cutoff is unknown and every house bet is refunded.
   const live = Boolean(cm.liveStartedAt || cm.liveId);
   row.appendChild(el('div', 'bets-caption', live ? 'Closes at first goal'
-    : 'Closes at first goal · counts only if the match is scored in live mode'));
+    : 'Closes at first goal · live mode only'));
   return row;
 }
 
@@ -180,7 +181,8 @@ function challengeFeedLine(bet, now, cm) {
   const tail = el('span', `bets-feed-result ${r.status === 'lost' ? 'won' : r.status}`);
   const winner = { won: bet.challenger, lost: bet.acceptedBy }[r.status];
   if (winner) tail.append(`${winner} won `, footballs(pot));
-  else tail.textContent = r.status === 'pending' ? `accepted by ${bet.acceptedBy}` : r.status;
+  else if (r.status === 'pending') tail.textContent = isLockedIn(bet) ? 'locked in' : `accepted by ${bet.acceptedBy}`;
+  else tail.textContent = r.status;
   return feedLine('bets-feed-challenge', who, what, tail);
 }
 
@@ -229,6 +231,8 @@ function challengeError(err) {
   else if (m === 'not-you') showToast('This challenge is for someone else', 'warning');
   else if (m === 'own') showToast("You can't accept your own challenge", 'warning');
   else if (m === 'insufficient') showToast('Not enough golden footballs', 'warning');
+  else if (m.startsWith('insufficient:')) showToast(`${m.slice(13)} doesn't have enough golden footballs`, 'warning');
+  else if (m === 'too-much') showToast(`Stakes are limited to ${BETTING.maxStake} golden footballs`, 'warning');
   else if (m === 'closed') showToast('Challenge is closed', 'warning');
   else if (m === 'changed') showToast('The shared match changed — challenge not posted', 'warning');
   else { console.warn('[betting] challenge failed', err); showToast('Challenge failed', 'error'); }
@@ -255,8 +259,8 @@ function numberInput(className, value) {
   return input;
 }
 
-function field(text, control) {
-  const wrap = el('label', 'bet-sheet-field');
+function field(text, control, tag = 'label') {
+  const wrap = el(tag, 'bet-sheet-field');
   wrap.append(el('span', 'bet-sheet-field-label', text), control);
   return wrap;
 }
@@ -299,9 +303,12 @@ async function openChallengeForm(cm) {
 
   const myStake = numberInput('bet-sheet-stake challenge-my-stake', 10);
   const theirStake = numberInput('bet-sheet-stake challenge-their-stake', 10);
-  const stakeRow = el('div', 'bet-sheet-chips');
-  stakeRow.append(field('My stake', myStake), field('Their stake', theirStake));
+  myStake.setAttribute('aria-label', 'Challenger stake');
+  theirStake.setAttribute('aria-label', 'Opponent stake');
+  const stakeRow = el('div', 'challenge-stakes');
+  stakeRow.append(myStake, el('span', 'challenge-vs', 'vs'), theirStake);
   const info = el('div', 'bet-sheet-info');
+  const lockNote = el('div', 'bet-sheet-info challenge-lock-note');
 
   const teamRow = field('Team', teamSelect);
   const thresholdRow = field('By', thresholdSelect);
@@ -325,18 +332,35 @@ async function openChallengeForm(cm) {
       btn.setAttribute('aria-pressed', String(value === negate));
     }
     preview.textContent = describeOutcome(outcome(), label);
-    const pot = (Number(myStake.value) || 0) + (Number(theirStake.value) || 0);
-    const balance = challengerSelect.value ? available(challengerSelect.value) : 0;
-    amounts(info, [['You win', pot], ['Balance:', balance]]);
+    const mine = Number(myStake.value) || 0;
+    const theirs = Number(theirStake.value) || 0;
+    const challenger = challengerSelect.value || 'Challenger';
+    const opponent = opponentSelect.value;
+    info.replaceChildren(`${challenger} `, footballs(mine), ` vs ${opponent || 'anyone'} `, footballs(theirs),
+      ' · winner gets ', footballs(mine + theirs));
+    const balances = [[`${challenger}:`, challengerSelect.value ? available(challengerSelect.value) : 0]];
+    if (opponent) balances.push([`${opponent}:`, available(opponent)]);
+    const balanceLine = el('div');
+    amounts(balanceLine, balances.map(([who, n], i) => [i ? who : `Balance ${who}`, n]));
+    info.appendChild(balanceLine);
+    // A named opponent is locked in straight away; "anyone" needs someone to accept.
+    lockNote.textContent = opponent ? `Locks in straight away for ${opponent} — no accept needed.` : 'Open until someone accepts.';
+    const okBtn = sheet.closest('.confirm-dialog')?.querySelector('.confirm-btn-ok');
+    if (okBtn) okBtn.textContent = opponent ? 'Lock in' : 'Post challenge';
   }
   challengerSelect.addEventListener('change', () => { fillOpponents(); update(); });
+  opponentSelect.addEventListener('change', update);
   for (const node of [testSelect, teamSelect, thresholdSelect]) node.addEventListener('change', update);
   for (const node of [myStake, theirStake]) node.addEventListener('input', update);
   update();
 
-  sheet.append(field('Challenger', challengerSelect), field('Against', opponentSelect), field('Bet', testSelect),
-    teamRow, thresholdRow, sideToggle, preview, stakeRow, info);
-  const ok = await showConfirm('', { contentElement: sheet, confirmLabel: 'Challenge', cancelLabel: 'Cancel' });
+  const grid = el('div', 'bet-sheet-grid');
+  grid.append(field('Challenger', challengerSelect), field('Against', opponentSelect), field('Bet', testSelect),
+    teamRow, thresholdRow, field('Side', sideToggle, 'div'), field('Stakes', stakeRow, 'div'));
+  sheet.append(grid, preview, info, lockNote);
+  const pending = showConfirm('', { contentElement: sheet, confirmLabel: 'Post challenge', cancelLabel: 'Cancel' });
+  update(); // the dialog exists now: label its confirm button
+  const ok = await pending;
   if (!ok) return;
 
   const challenger = challengerSelect.value;
@@ -350,7 +374,7 @@ async function openChallengeForm(cm) {
   saveBettor(challenger);
   try {
     const id = await placeChallenge({ challenger, opponent: opponentSelect.value || null, outcome: outcome(), challengerStake, opponentStake, matchupKey: cm.matchupKey });
-    showToast('Challenge posted — tap to undo', 'success', BETTING.undoWindowMs, () => {
+    showToast(opponentSelect.value ? 'Challenge locked in — tap to undo' : 'Challenge posted — tap to undo', 'success', BETTING.undoWindowMs, () => {
       withdrawChallenge(id).catch(challengeError);
     });
   } catch (err) {
@@ -464,6 +488,7 @@ async function openBetSheet({ outcome, odds, title, matchupKey: key }) {
     if (err.message === 'closed') showToast('Bet not accepted — betting had closed', 'warning');
     else if (err.message === 'changed') showToast('Odds changed — bet not placed, check the new odds', 'warning');
     else if (err.message === 'insufficient') showToast('Not enough golden footballs', 'warning');
+    else if (err.message === 'too-much') showToast(`Stakes are limited to ${BETTING.maxStake} golden footballs`, 'warning');
     else { console.warn('[betting] bet failed', err); showToast('Bet failed', 'error'); }
   }
 }
@@ -476,14 +501,16 @@ function tickTimer() {
 function render() {
   const box = document.getElementById('betsBox');
   const content = document.getElementById('betsContent');
+  const heading = document.getElementById('betsHeading');
   if (!box || !content) return;
   const cm = getCurrentMatch();
-  if (!BETTING.enabled || !cm?.matchupKey) {
-    box.style.display = 'none';
+  const visible = BETTING.enabled && Boolean(cm?.matchupKey);
+  box.style.display = visible ? '' : 'none';
+  if (heading) heading.style.display = visible ? '' : 'none';
+  if (!visible) {
     content.replaceChildren();
     return;
   }
-  box.style.display = '';
   content.replaceChildren(...[renderHeader(cm), renderLive(cm), renderHouse(cm), renderChallengeButton(cm), ...renderFeed(cm)].filter(Boolean));
   // Only the timer text ticks; rebuilding buttons every second would eat taps.
   const live = Boolean(content.querySelector('.live-timer'));

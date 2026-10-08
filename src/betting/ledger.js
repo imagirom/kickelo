@@ -61,6 +61,11 @@ export function resolveHouseBet(bet, matches, now) {
     : { status: 'lost', matchId: match.id, payout: 0 };
 }
 
+/** A challenge to a named player is locked in when posted: accepted in the same write. */
+export function isLockedIn(bet) {
+  return Boolean(bet.opponent) && bet.acceptedBy === bet.opponent && bet.acceptedAt != null && bet.acceptedAt === bet.placedAt;
+}
+
 export function resolveChallenge(bet, matches, now) {
   const match = findMatch(bet.matchupKey, bet.placedAt, matches);
   const accepted = Boolean(bet.acceptedBy) && typeof bet.acceptedAt === 'number';

@@ -3,7 +3,7 @@
 import { BETTING, houseBetsActive } from '../src/betting/betting-config.js';
 import { matchupKey, isFullLineup, sameTeam } from '../src/betting/matchup.js';
 import { goalProbability, scorelineDistribution, winProbability, toOdds, logLikelihood, pathDistribution, outcomeProbability, normalCdf } from '../src/betting/model.js';
-import { dayKey, firstGoalAt, resolveHouseBet, resolveChallenge, computeBalances, checkBet, openStakeFor, acceptDecision, deniedChallengeReason } from '../src/betting/ledger.js';
+import { dayKey, firstGoalAt, resolveHouseBet, resolveChallenge, isLockedIn, computeBalances, checkBet, openStakeFor, acceptDecision, deniedChallengeReason } from '../src/betting/ledger.js';
 import { liveStartQuestion, shouldClearAfterSubmit, buildOffer, shouldPublishLineup, needsOverwriteConfirm, goalUpdate, isLiveTakeover, ownsLive, showNotSharedHint, liveClaimUpdate } from '../src/betting/current-match.js';
 import params from '../src/betting/model-params.json' with { type: 'json' };
 import { OUTCOME_TESTS, evaluateOutcome, describeOutcome } from '../src/betting/outcomes.js';
@@ -246,7 +246,7 @@ console.log('\n=== outcome tests ===');
   assertEq(OUTCOME_TESTS.map((t) => t.id), ['winner', 'marginAtLeast', 'shutout', 'goesToFourFour', 'durationOver', 'scoresFirst', 'firstScorerWins', 'comebackAtLeast'], 'catalog order');
   const lab = (p) => (p[0] === 'Manuel' ? 'MaMa' : p.join(' + '));
   assertEq(describeOutcome(o('marginAtLeast', { team: R, threshold: 3 }), lab), 'MaMa win by 3+', 'describe margin');
-  assertEq(describeOutcome(o('durationOver', { threshold: 270 }), lab), 'Over 4:30', 'describe duration');
+  assertEq(describeOutcome(o('durationOver', { threshold: 270 }), lab), 'Duration over 4:30', 'describe duration');
   assertEq(describeOutcome(o('goesToFourFour', { negate: true }), lab), "Doesn't go to 4:4", 'describe negation positively');
   assertEq(describeOutcome(o('winner', { team: R, negate: true }), lab), 'MaMa lose', 'negated winner reads as a loss');
   assertEq(describeOutcome(o('comebackAtLeast', { team: B, threshold: 1, negate: true }), lab), 'No Roman + Tobi comeback from 1 down', 'negated comeback');
@@ -440,6 +440,22 @@ console.log('\n=== live start question ===');
   assertEq(liveStartQuestion({ matchupKey: 'A::B|C::D', offer: {} }, 'A::C|B::D', 0, null), null, 'idle other matchup without bets -> no question');
   assertEq(liveStartQuestion(cur, null, 3, null), null, 'incomplete local lineup -> no question (live may start before teams)');
   assertEq(liveStartQuestion(null, 'A::B|C::D', 0, null), null, 'no shared match -> no question');
+}
+
+console.log('\n=== locked-in challenges ===');
+{
+  const day = new Date(2026, 9, 8, 12).getTime();
+  const R = ['Manuel', 'Marc']; const B = ['Roman', 'Tobi'];
+  const lock = { kind: 'challenge', matchupKey: 'Manuel::Marc|Roman::Tobi', placedAt: day, challenger: 'Simon', challengerStake: 10,
+    opponent: 'Peter', opponentStake: 30, outcome: { test: 'winner', team: R }, acceptedBy: 'Peter', acceptedAt: day, void: false };
+  assertEq(isLockedIn(lock), true, 'named opponent accepted in the posting write -> locked in');
+  assertEq(isLockedIn({ ...lock, acceptedAt: day + 5000 }), false, 'accepted later -> not a lock-in');
+  assertEq(isLockedIn({ ...lock, opponent: null, acceptedBy: 'Peter' }), false, '"anyone" challenges are never locked in');
+  const m = { id: 'L1', timestamp: day + 600000, teamA: R, teamB: B, winner: 'A', goalsA: 5, goalsB: 2, matchDuration: 240000, goalLog: [{ team: 'red', timestamp: 30000 }] };
+  assertEq(resolveChallenge(lock, [], day + 1000).status, 'pending', 'locked in before the match -> pending, both stakes held');
+  assertEq(resolveChallenge(lock, [m], day + 700000).challengerPayout, 40, 'locked-in challenge settles like an accepted one');
+  const bal = computeBalances([lock], [], day + 1000);
+  assertEq([bal.get('Simon').balance, bal.get('Peter').balance], [90, 70], 'both stakes held from posting, allowance for both');
 }
 
 // --- further sections are appended by later tasks above this line ---

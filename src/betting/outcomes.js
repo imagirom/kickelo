@@ -83,7 +83,7 @@ export function describeOutcome(outcome, labelOf) {
     marginAtLeast: [`${t} win by ${k}+`, `${t} don't win by ${k}+`],
     shutout: [`${t} win 5:0`, `${t} don't win 5:0`],
     goesToFourFour: ['Goes to 4:4', "Doesn't go to 4:4"],
-    durationOver: [`Over ${mmss(k)}`, `Not over ${mmss(k)}`],
+    durationOver: [`Duration over ${mmss(k)}`, `Duration not over ${mmss(k)}`],
     scoresFirst: [`${t} score first`, `${t} don't score first`],
     firstScorerWins: ['First scorer wins', 'First scorer loses'],
     comebackAtLeast: [`${t} comeback from ${k} down`, `No ${t} comeback from ${k} down`],

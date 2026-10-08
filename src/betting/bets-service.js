@@ -80,6 +80,7 @@ export async function placeHouseBet({ bettor, stake, outcome, expectedOdds, matc
   };
   const verdict = checkBet(bet, { currentMatch: cm });
   if (!verdict.ok) throw new Error(verdict.reason);
+  if (stake > BETTING.maxStake) throw new Error('too-much');
   if (stake > available(bettor)) throw new Error('insufficient');
   try {
     const ref = await addDoc(collection(db, 'bets'), { ...bet, placedAt: serverTimestamp() });
@@ -120,8 +121,13 @@ export async function placeChallenge({ challenger, opponent, outcome, challenger
   };
   const verdict = checkBet(bet, { currentMatch: cm });
   if (!verdict.ok) throw new Error(verdict.reason);
+  if (Math.max(challengerStake, opponentStake) > BETTING.maxStake) throw new Error('too-much');
   if (challengerStake > available(challenger)) throw new Error('insufficient');
-  const ref = await addDoc(collection(db, 'bets'), { ...bet, placedAt: serverTimestamp() }).catch(deniedAsClosed);
+  // A named opponent is locked in straight away (no accept step), so their stake is checked now too.
+  if (bet.opponent && opponentStake > available(bet.opponent)) throw new Error(`insufficient:${bet.opponent}`);
+  const now = serverTimestamp();
+  const lockIn = bet.opponent ? { acceptedBy: bet.opponent, acceptedAt: now } : {};
+  const ref = await addDoc(collection(db, 'bets'), { ...bet, ...lockIn, placedAt: now }).catch(deniedAsClosed);
   return ref.id;
 }
 
@@ -145,7 +151,9 @@ export async function withdrawChallenge(id) {
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
     const c = snap.data();
-    if (c?.acceptedBy) throw new Error(`taken:${c.acceptedBy}`);
+    // a locked-in challenge can only be undone right after posting (rules: 60 s)
+    const lockedIn = c?.acceptedBy && c.acceptedAt?.isEqual?.(c.placedAt);
+    if (c?.acceptedBy && !lockedIn) throw new Error(`taken:${c.acceptedBy}`);
     tx.update(ref, { void: true });
   }).catch(deniedChallenge(ref, null));
 }

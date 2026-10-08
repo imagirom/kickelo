@@ -10,6 +10,7 @@ export const BETTING = {
   oddsClamp: [1.05, 10],
   dailyAllowance: 100,
   undoWindowMs: 5000,
+  maxStake: 10000,        // also enforced in firestore.rules (isStake)
   stakeChips: [5, 10, 25],
 };
 
