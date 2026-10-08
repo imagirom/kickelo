@@ -124,6 +124,19 @@ export function acceptDecision(c, acceptor) {
   return 'ok';
 }
 
+/**
+ * Error message for a challenge write the rules denied, from a fresh read of the doc
+ * (null = gone). acceptor null = a withdraw. A lost accept race is denied by the rules,
+ * not retried as contention, so this is how the loser learns who took it.
+ */
+export function deniedChallengeReason(c, acceptor = null) {
+  if (!c) return 'withdrawn';
+  if (c.acceptedBy) return `taken:${c.acceptedBy}`;
+  if (!acceptor) return 'closed';
+  const d = acceptDecision(c, acceptor);
+  return d === 'ok' ? 'closed' : d;
+}
+
 /** House rules hook. "Anything goes" for now. */
 export function checkBet(_bet, _context) {
   return { ok: true };

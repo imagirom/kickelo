@@ -1,9 +1,9 @@
 // src/betting/bets-service.js
 // Real-time 'bets' collection + placing/undoing house bets.
-import { db, collection, doc, addDoc, updateDoc, onSnapshot, serverTimestamp, runTransaction } from '../firebase-service.js';
+import { db, collection, doc, addDoc, updateDoc, onSnapshot, serverTimestamp, runTransaction, getDoc } from '../firebase-service.js';
 import { allMatches } from '../match-data-service.js';
 import { BETTING } from './betting-config.js';
-import { computeBalances, checkBet, resolveHouseBet, resolveChallenge, dayKey, acceptDecision } from './ledger.js';
+import { computeBalances, checkBet, resolveHouseBet, resolveChallenge, dayKey, acceptDecision, deniedChallengeReason } from './ledger.js';
 import { getCurrentMatch } from './current-match-service.js';
 import { teamKey } from '../teams/team-identity.js';
 
@@ -93,6 +93,14 @@ export async function undoBet(id) {
 
 const deniedAsClosed = (err) => { throw err?.code === 'permission-denied' ? new Error('closed') : err; };
 
+/** On a rules denial, re-read the challenge to say why (e.g. taken:<name> after a lost race). */
+const deniedChallenge = (ref, acceptor) => async (err) => {
+  if (err?.code !== 'permission-denied') throw err;
+  let snap;
+  try { snap = await getDoc(ref); } catch { throw new Error('closed'); }
+  throw new Error(deniedChallengeReason(snap.exists() ? snap.data() : null, acceptor));
+};
+
 /** outcome: { test, team, threshold?, negate? } claimed by the challenger; the acceptor takes the opposite side. */
 export async function placeChallenge({ challenger, opponent, outcome, challengerStake, opponentStake }) {
   const cm = getCurrentMatch();
@@ -124,7 +132,7 @@ export async function acceptChallenge(id, acceptor) {
     if (decision === 'taken') throw new Error(`taken:${c.acceptedBy}`);
     if (decision !== 'ok') throw new Error(decision);
     tx.update(ref, { acceptedBy: acceptor, acceptedAt: serverTimestamp() });
-  }).catch(deniedAsClosed);
+  }).catch(deniedChallenge(ref, acceptor));
 }
 
 export async function withdrawChallenge(id) {
@@ -134,5 +142,5 @@ export async function withdrawChallenge(id) {
     const c = snap.data();
     if (c?.acceptedBy) throw new Error(`taken:${c.acceptedBy}`);
     tx.update(ref, { void: true });
-  });
+  }).catch(deniedChallenge(ref, null));
 }

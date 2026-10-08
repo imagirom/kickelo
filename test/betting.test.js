@@ -3,7 +3,7 @@
 import { BETTING, houseBetsActive } from '../src/betting/betting-config.js';
 import { matchupKey, isFullLineup, sameTeam } from '../src/betting/matchup.js';
 import { goalProbability, scorelineDistribution, winProbability, toOdds, logLikelihood, pathDistribution, outcomeProbability, normalCdf } from '../src/betting/model.js';
-import { dayKey, firstGoalAt, resolveHouseBet, resolveChallenge, computeBalances, checkBet, openStakeFor, acceptDecision } from '../src/betting/ledger.js';
+import { dayKey, firstGoalAt, resolveHouseBet, resolveChallenge, computeBalances, checkBet, openStakeFor, acceptDecision, deniedChallengeReason } from '../src/betting/ledger.js';
 import { shouldClearAfterSubmit, buildOffer, shouldPublishLineup, needsOverwriteConfirm, goalUpdate, isLiveTakeover, ownsLive, showNotSharedHint, liveClaimUpdate } from '../src/betting/current-match.js';
 import params from '../src/betting/model-params.json' with { type: 'json' };
 import { OUTCOME_TESTS, evaluateOutcome, describeOutcome } from '../src/betting/outcomes.js';
@@ -381,6 +381,17 @@ console.log('\n=== challenge accept decision and overwrite stake ===');
   assertEq(openStakeFor([house, chal, other, { ...house, void: true }], [], key, day + 2000), { count: 2, stake: 60 }, 'open house + accepted challenge counted');
   assertEq(openStakeFor([resolved], [m], key, day + 700000), { count: 0, stake: 0 }, 'resolved bets ignored');
   assertEq(openStakeFor([{ ...chal, acceptedBy: null, acceptedAt: null }], [], key, day + 2000), { count: 1, stake: 10 }, 'unaccepted challenge: challenger stake only');
+}
+
+console.log('\n=== denied challenge write -> reason from a fresh read ===');
+{
+  const c = { challenger: 'Simon', opponent: null, acceptedBy: null, void: false };
+  assertEq(deniedChallengeReason({ ...c, acceptedBy: 'Tobi' }, 'Peter'), 'taken:Tobi', 'lost accept race -> taken:<winner>');
+  assertEq(deniedChallengeReason({ ...c, void: true }, 'Peter'), 'withdrawn', 'accept vs withdraw -> withdrawn');
+  assertEq(deniedChallengeReason(c, 'Peter'), 'closed', 'still open (matchup changed) -> closed');
+  assertEq(deniedChallengeReason(null, 'Peter'), 'withdrawn', 'doc gone -> withdrawn');
+  assertEq(deniedChallengeReason({ ...c, acceptedBy: 'Tobi' }), 'taken:Tobi', 'withdraw lost to accept -> taken:<acceptor>');
+  assertEq(deniedChallengeReason(c), 'closed', 'withdraw denied otherwise -> closed');
 }
 
 // --- further sections are appended by later tasks above this line ---
