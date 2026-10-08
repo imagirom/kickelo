@@ -265,10 +265,13 @@ enabled and `meta/currentMatch` has a full lineup):
   `createTimelineSVG(goalLog)`. Read-only.
 - House section: "Red wins ×", "Blue wins ×", and the seeded props with yes/no
   odds. Label "Closes at first goal" (plus "counts only if the match is scored in
-  live mode" while no phone is live); after the first goal the section collapses to
+  live mode" while no phone is live; shown as "live mode only"); after the first goal the section collapses to
   one line "Closed at first goal · odds were …".
 - "Challenge someone…" opens the challenge form: challenger, opponent
-  (player or **anyone**), outcome test, threshold, both stakes.
+  (player or **anyone**), outcome test, threshold, both stakes. A challenge to a
+  named player is **locked in** when posted (accepted in the same write, both
+  balances checked; button "Lock in"); "anyone" challenges need an accept
+  ("Post challenge"). Stakes are capped at `BETTING.maxStake` (10000).
 - Feed: all non-void bets on the current matchup, live via `onSnapshot`;
   open challenges show **Accept** (if opponent is anyone or the selected player;
   "closed at first goal" for pre-match challenges after it). Below, the results of
