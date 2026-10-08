@@ -17,3 +17,7 @@ export const BETTING = {
 export function houseBetsActive(cfg = BETTING) {
   return cfg.enabled && cfg.liveSync && cfg.houseWinner;
 }
+
+export function propsActive(cfg = BETTING) {
+  return houseBetsActive(cfg) && Boolean(cfg.houseProps?.enabled);
+}

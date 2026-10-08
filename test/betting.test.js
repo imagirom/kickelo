@@ -7,6 +7,7 @@ import { dayKey, firstGoalAt, resolveHouseBet, computeBalances, checkBet } from 
 import { shouldClearAfterSubmit, buildOffer, shouldPublishLineup, needsOverwriteConfirm, goalUpdate, isLiveTakeover, ownsLive, showNotSharedHint, liveClaimUpdate } from '../src/betting/current-match.js';
 import params from '../src/betting/model-params.json' with { type: 'json' };
 import { OUTCOME_TESTS, evaluateOutcome, describeOutcome } from '../src/betting/outcomes.js';
+import { candidateProps, eligible, drawProps, seededRandom } from '../src/betting/props.js';
 
 let passed = 0;
 let failed = 0;
@@ -269,6 +270,38 @@ console.log('\n=== path enumeration ===');
   const PD = { ...P, duration: { a: Math.log(260), b: 0, sigma: 0.3 } };
   assertClose(outcomeProbability({ test: 'durationOver', team: null, threshold: 260 }, 0, PD), 0.5, 1e-6, 'duration median -> 0.5');
   assertEq(outcomeProbability({ test: 'durationOver', team: null, threshold: 260 }, 0, P), null, 'no duration model -> null');
+}
+
+console.log('\n=== props ===');
+{
+  const P = { s: 1115, c: 0.01, kappa: 43, duration: { a: Math.log(258), b: 0.0002, sigma: 0.35 } };
+  const red = ['A', 'B']; const blue = ['C', 'D'];
+  const cands = candidateProps(red, blue, 80, P);
+  assertEq(cands.some((c) => c.outcome.test === 'winner'), false, 'winner is not a prop');
+  assertEq(cands.every((c) => c.p > 0 && c.p < 1), true, 'all probabilities in (0,1)');
+  const el = eligible(cands, 3);
+  assertEq(el.every((c) => c.p >= 0.25 && c.p <= 0.75), true, 'maxRatio 3 -> p in [0.25, 0.75]');
+  const a = drawProps(el, 2, 'A::B|C::D:2026-10-08');
+  const b = drawProps(el, 2, 'A::B|C::D:2026-10-08');
+  assertEq(a.map((c) => c.id), b.map((c) => c.id), 'same seed -> same props');
+  assertEq(a.length, 2, 'draws count props');
+  assertEq(new Set(a.map((c) => c.outcome.test)).size, 2, 'at most one prop per test type');
+  const other = drawProps(el, 2, 'A::B|C::D:2026-10-09');
+  assertEq(typeof other[0].id, 'string', 'other seed still works');
+  assertEq(drawProps([], 2, 'x'), [], 'no eligible props -> empty list');
+  assertEq(eligible(candidateProps(red, blue, 3000, { s: 1115, c: 0, kappa: Infinity }), 3).filter((c) => c.outcome.team).length >= 0, true, 'extreme gap does not throw');
+  const r = seededRandom('seed'); const r2 = seededRandom('seed');
+  assertEq([r(), r(), r()], [r2(), r2(), r2()], 'seeded PRNG deterministic');
+
+  const offer = buildOffer(red, blue, (n) => ({ A: 1600, B: 1580, C: 1500, D: 1480 })[n], P,
+    { ...BETTING, houseProps: { enabled: true, count: 2, maxRatio: 3, minSamples: 30 } }, 'A::B|C::D:2026-10-08');
+  assertEq(offer.props.length, 2, 'offer carries 2 props');
+  for (const pr of offer.props) {
+    assertEq(pr.oddsYes >= 1.05 && pr.oddsNo >= 1.05 && pr.oddsYes <= 10 && pr.oddsNo <= 10, true, `odds clamped for ${pr.id}`);
+  }
+  const off = buildOffer(red, blue, () => 1500, P, { ...BETTING, houseProps: { ...BETTING.houseProps, enabled: false } }, 's');
+  assertEq(off.props, [], 'props disabled -> empty list, winner still present');
+  assertEq(Object.keys(off.winner).length, 2, 'winner odds unaffected');
 }
 
 // --- further sections are appended by later tasks above this line ---

@@ -43,7 +43,7 @@ export async function publishLineup({ red, blue, positions }, { expectedUpdatedA
       red: [...red].sort(), blue: [...blue].sort(), positions,
       matchupKey: matchupKey(red, blue),
       liveStartedAt: null, liveId: null, goalLog: [], firstGoalAt: null,
-      offer: buildOffer(red, blue, eloOf, params, BETTING),
+      offer: buildOffer(red, blue, eloOf, params, BETTING, `${matchupKey(red, blue)}:${new Date().toLocaleDateString('sv')}`),
       updatedAt: serverTimestamp(),
     });
   });

@@ -3,15 +3,22 @@
 import { matchupKey, isFullLineup } from './matchup.js';
 import { winProbability, toOdds } from './model.js';
 import { teamKey } from '../teams/team-identity.js';
+import { propsActive } from './betting-config.js';
+import { candidateProps, eligible, drawProps } from './props.js';
 
 const avg = (pair, eloOf) => (eloOf(pair[0]) + eloOf(pair[1])) / 2;
 
-export function buildOffer(red, blue, eloOf, params, cfg) {
+export function buildOffer(red, blue, eloOf, params, cfg, seed = '') {
   const gap = avg(red, eloOf) - avg(blue, eloOf);
   const pRed = winProbability(gap, params);
+  const props = propsActive(cfg)
+    ? drawProps(eligible(candidateProps(red, blue, gap, params), cfg.houseProps.maxRatio), cfg.houseProps.count, seed)
+        .map(({ id, outcome, p }) => ({ id, outcome, oddsYes: toOdds(p, cfg), oddsNo: toOdds(1 - p, cfg) }))
+    : [];
   return {
     winner: { [teamKey(red)]: toOdds(pRed, cfg), [teamKey(blue)]: toOdds(1 - pRed, cfg) },
     gap: Math.round(gap),
+    props,
   };
 }
 
