@@ -19,6 +19,11 @@ export function matchupKey(red = [], blue = []) {
   return [teamKey(red), teamKey(blue)].sort().join('|');
 }
 
+/** The four players of a matchup key. */
+export function matchupPlayers(key = '') {
+  return key ? key.split('|').flatMap((team) => team.split('::')) : [];
+}
+
 export function sameTeam(a = [], b = []) {
   return teamKey(a) === teamKey(b);
 }

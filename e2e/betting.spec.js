@@ -49,9 +49,9 @@ test('lineup, live score and house bets sync across phones', async ({ browser })
   await signInViaUI(a);
   await signInViaUI(b);
   await a.waitForFunction(() => document.querySelectorAll('#teamA1 option').length > 4);
-  const names = await a.$$eval('#teamA1 option', (os) => os.map((o) => o.value).filter((v) => v && v !== '__add_new__').slice(0, 4));
+  const names = await playerNames(a);
   await a.click('body'); // user activation
-  await pickLineup(a, names);
+  await pickLineup(a, names.slice(0, 4));
 
   const box = b.locator('#betsBox');
   await expect(box).toBeVisible({ timeout: 10000 });
@@ -59,7 +59,9 @@ test('lineup, live score and house bets sync across phones', async ({ browser })
 
   // B bets 10 on red.
   await box.locator('button', { hasText: 'Red wins' }).click();
-  await b.locator('.confirm-dialog select.bet-sheet-bettor').selectOption(names[0]);
+  // players in the match are not offered as bettors
+  await expect(b.locator(`.confirm-dialog select.bet-sheet-bettor option[value="${names[0]}"]`)).toHaveCount(0);
+  await b.locator('.confirm-dialog select.bet-sheet-bettor').selectOption(names[4]);
   await b.locator('.confirm-dialog input[type=number]').fill('10');
   await b.locator('.confirm-btn-ok').click();
   await expect(box).toContainText('10');

@@ -35,7 +35,7 @@ Plus a **shared live view** of the current match on every phone, and a subtle
 - Enforcing balances or rules server-side (trust-based like the rest of the app).
 - Shop / cosmetics (phase 4, separate spec), bounties (later, needs a design
   that gives strong players no advantage), hybrid crowd-adjusted odds (later).
-- House rules about who may bet on what ("anything goes" for now, see `checkBet`).
+- House rules about who may bet on what (see `checkBet`: players in the match cannot bet on it).
 
 ## Context (current code)
 
@@ -177,7 +177,7 @@ bet of the day (the bet itself earns it). The client blocks stakes larger than t
 balance, for placing and for accepting (trust-based; not enforced in rules).
 
 **Rules hook:** `checkBet(bet, context) → { ok: true } | { ok: false, reason }`.
-Allows everything for now ("anything goes"); house rules are added there later.
+Players in the match cannot bet on it: as bettor, challenger, named opponent or acceptor (`playing:<name>`); the bettor lists leave them out. Client-side only, like the rest of the trust model.
 
 ## Outcome tests
 

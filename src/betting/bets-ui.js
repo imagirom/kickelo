@@ -4,7 +4,7 @@
 import { allPlayers } from '../player-data-service.js';
 import { allMatches } from '../match-data-service.js';
 import { teamKey } from '../teams/team-identity.js';
-import { matchupKey } from './matchup.js';
+import { matchupKey, matchupPlayers } from './matchup.js';
 import { getTeamRecord } from '../teams/team-service.js';
 import { showConfirm, showToast } from '../toast.js';
 import { createTimelineSVG, formatMsToMMSS } from '../match-timeline.js';
@@ -222,7 +222,8 @@ function renderFeed(cm) {
   return parts;
 }
 
-const playerNames = () => allPlayers.map((p) => p.id).sort();
+/** Who can bet: everyone except the four players in the match. */
+const playerNames = (key) => allPlayers.map((p) => p.id).filter((n) => !matchupPlayers(key).includes(n)).sort();
 
 function fillSelect(select, names, keep) {
   select.replaceChildren(...names.map(([value, text]) => new Option(text, value)));
@@ -238,6 +239,7 @@ function challengeError(err) {
   else if (m === 'insufficient') showToast('Not enough golden footballs', 'warning');
   else if (m.startsWith('insufficient:')) showToast(`${m.slice(13)} doesn't have enough golden footballs`, 'warning');
   else if (m === 'too-much') showToast(`Stakes are limited to ${BETTING.maxStake} golden footballs`, 'warning');
+  else if (m.startsWith('playing:')) showToast(`${m.slice(8)} is playing in this match and can't bet on it`, 'warning');
   else if (m === 'closed') showToast('Challenge is closed', 'warning');
   else if (m === 'changed') showToast('The shared match changed — challenge not posted', 'warning');
   else { console.warn('[betting] challenge failed', err); showToast('Challenge failed', 'error'); }
@@ -289,9 +291,9 @@ async function openChallengeForm(cm) {
 
   const challengerSelect = el('select', 'challenge-challenger');
   const opponentSelect = el('select', 'challenge-opponent');
-  fillSelect(challengerSelect, [['', 'Who is challenging?'], ...playerNames().map((n) => [n, n])], readBettor());
+  fillSelect(challengerSelect, [['', 'Who is challenging?'], ...playerNames(cm.matchupKey).map((n) => [n, n])], readBettor());
   const fillOpponents = () => fillSelect(opponentSelect,
-    [['', 'Anyone'], ...playerNames().filter((n) => n !== challengerSelect.value).map((n) => [n, n])], opponentSelect.value);
+    [['', 'Anyone'], ...playerNames(cm.matchupKey).filter((n) => n !== challengerSelect.value).map((n) => [n, n])], opponentSelect.value);
   fillOpponents();
 
   const testSelect = el('select', 'challenge-test');
@@ -414,7 +416,7 @@ async function openAcceptSheet(bet) {
   const context = liveContext(getCurrentMatch(), bet);
   if (context) sheet.appendChild(el('div', 'bet-sheet-info bets-live-context', context));
   const acceptorSelect = el('select', 'challenge-acceptor');
-  const names = bet.opponent ? [bet.opponent] : playerNames().filter((n) => n !== bet.challenger);
+  const names = bet.opponent ? [bet.opponent] : playerNames(bet.matchupKey).filter((n) => n !== bet.challenger);
   fillSelect(acceptorSelect, [...(bet.opponent ? [] : [['', 'Who accepts?']]), ...names.map((n) => [n, n])], readBettor());
   const info = el('div', 'bet-sheet-info');
   const update = () => {
@@ -453,7 +455,7 @@ async function openBetSheet({ outcome, odds, title, matchupKey: key }) {
   sheet.appendChild(el('div', 'bet-sheet-title', `${title} · ${fmtOdds(odds)}`));
 
   const bettorSelect = el('select', 'bet-sheet-bettor');
-  fillSelect(bettorSelect, [['', 'Who is betting?'], ...playerNames().map((n) => [n, n])], readBettor());
+  fillSelect(bettorSelect, [['', 'Who is betting?'], ...playerNames(key).map((n) => [n, n])], readBettor());
 
   const chips = el('div', 'bet-sheet-chips');
   chips.setAttribute('role', 'group');
@@ -509,6 +511,7 @@ async function openBetSheet({ outcome, odds, title, matchupKey: key }) {
     else if (err.message === 'changed') showToast('Odds changed — bet not placed, check the new odds', 'warning');
     else if (err.message === 'insufficient') showToast('Not enough golden footballs', 'warning');
     else if (err.message === 'too-much') showToast(`Stakes are limited to ${BETTING.maxStake} golden footballs`, 'warning');
+    else if (err.message.startsWith('playing:')) showToast(`${err.message.slice(8)} is playing in this match and can't bet on it`, 'warning');
     else { console.warn('[betting] bet failed', err); showToast('Bet failed', 'error'); }
   }
 }

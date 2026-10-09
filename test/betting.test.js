@@ -137,7 +137,10 @@ console.log('\n=== ledger ===');
   assertEq(twoDays.get('Simon').balance, 2 * BETTING.dailyAllowance, 'two days of allowance, both refunded');
   assertEq(dayKey(day + 3600 * 1000), dayKey(day), 'dayKey groups by local day');
 
-  assertEq(checkBet(bet(day), {}), { ok: true }, 'checkBet allows everything for now');
+  assertEq(checkBet(bet(day), {}), { ok: true }, 'spectators can bet');
+  assertEq(checkBet(bet(day, { bettor: red[0] }), {}), { ok: false, reason: `playing:${red[0]}` }, 'a player in the match cannot bet on it');
+  assertEq(checkBet({ kind: 'challenge', matchupKey: key, challenger: 'Simon', opponent: blue[1] }, {}).reason, `playing:${blue[1]}`, 'nor be challenged on it');
+  assertEq(checkBet({ kind: 'challenge', matchupKey: key, challenger: 'Simon', opponent: null, acceptedBy: red[1] }, {}).ok, false, 'nor accept a challenge on it');
 }
 
 console.log('\n=== current match helpers ===');

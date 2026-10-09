@@ -2,7 +2,7 @@
 // Derived betting ledger: nothing is ever "settled" in Firestore. Results and
 // balances are recomputed from bets + matches, so match edits/deletes flow through.
 import { BETTING } from './betting-config.js';
-import { matchupKey } from './matchup.js';
+import { matchupKey, matchupPlayers } from './matchup.js';
 import { evaluateOutcome } from './outcomes.js';
 
 export function dayKey(ms) {
@@ -163,7 +163,9 @@ export function deniedChallengeReason(c, acceptor = null) {
   return d === 'ok' ? 'closed' : d;
 }
 
-/** House rules hook. "Anything goes" for now. */
-export function checkBet(_bet, _context) {
-  return { ok: true };
+/** House rules: players in the match can't bet on it (house bet, challenge or accept). */
+export function checkBet(bet, _context) {
+  const playing = matchupPlayers(bet.matchupKey);
+  const who = [bet.bettor, bet.challenger, bet.opponent, bet.acceptedBy].find((n) => n && playing.includes(n));
+  return who ? { ok: false, reason: `playing:${who}` } : { ok: true };
 }

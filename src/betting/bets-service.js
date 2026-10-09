@@ -139,6 +139,8 @@ export async function acceptChallenge(id, acceptor) {
     const snap = await tx.get(ref);
     if (!snap.exists()) throw new Error('withdrawn');
     const c = snap.data();
+    const verdict = checkBet({ ...c, acceptedBy: acceptor });
+    if (!verdict.ok) throw new Error(verdict.reason);
     const decision = acceptDecision(c, acceptor);
     if (decision === 'taken') throw new Error(`taken:${c.acceptedBy}`);
     if (decision !== 'ok') throw new Error(decision);
