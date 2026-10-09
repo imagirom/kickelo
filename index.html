@@ -358,6 +358,22 @@
 
   <ul id="leaderboard" class="shared-list"></ul>
 
+  <!-- ELO graph for all players -->
+  <h2 id="eloOverviewHeading" class="section-heading">ELO Graph</h2>
+  <div class="elo-overview-controls">
+    <label><input type="checkbox" id="eloOverviewSmoothed" /> Smoothed</label>
+    <span class="spacer"></span>
+    <select id="eloOverviewRange">
+      <option value="season">Season</option>
+      <option value="20d">Last 20 active days</option>
+      <option value="5d">Last 5 active days</option>
+    </select>
+  </div>
+  <div id="eloOverviewContainer" class="elo-overview-container">
+    <canvas id="eloOverviewChart"></canvas>
+  </div>
+  <p id="eloOverviewEmpty" class="elo-overview-empty" style="display: none;">No matches in this season yet.</p>
+
   <!-- Activity Heatmap -->
   <h2 id="activityHeatmapHeading" class="section-heading">Activity Heatmap</h2>
   <div id="activityHeatmap" class="activity-heatmap-container"></div>
