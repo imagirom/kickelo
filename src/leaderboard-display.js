@@ -43,6 +43,20 @@ export function setOnPlayerClick(callback) {
 export function setShowInactivePlayers(show) {
     showInactivePlayers = show;
     updateLeaderboardDisplay();
+    window.dispatchEvent(new CustomEvent('inactive-filter-changed', { detail: { show } }));
+}
+
+/**
+ * Whether a player with the given cached stats should appear in leaderboard-style views
+ * for the selected season, honoring the "show inactive players" toggle.
+ */
+export function isPlayerVisible(stats) {
+    if (!stats || !Array.isArray(stats.eloTrajectory) || stats.eloTrajectory.length === 0) return false;
+    if (showInactivePlayers) return true;
+    const selectedSeason = getSelectedSeason();
+    const isCurrentSeason = selectedSeason ? selectedSeason.includes(Date.now()) : true;
+    if (isCurrentSeason) return Boolean(stats.isActive);
+    return stats.eloTrajectory.length >= 10;
 }
 
 export function getShowInactivePlayers() {
@@ -461,31 +475,8 @@ async function updateLeaderboardDisplay() {
         return bValue - aValue;  // Descending order
     });
 
-    // Filter out players without matches in the selected season
-    let filteredPlayers = sortedPlayers.filter(player => {
-        const stats = allStats[player.name];
-        return stats && Array.isArray(stats.eloTrajectory) && stats.eloTrajectory.length > 0;
-    });
-
-    const selectedSeason = getSelectedSeason();
-    const isCurrentSeason = selectedSeason
-        ? selectedSeason.includes(Date.now())
-        : true;
-
-    // Filter out inactive players if needed
-    filteredPlayers = showInactivePlayers
-        ? filteredPlayers
-        : filteredPlayers.filter(player => {
-            const stats = allStats[player.name];
-            if (!stats) return false;
-            if (isCurrentSeason) {
-                return stats.isActive;
-            }
-            const matchCount = Array.isArray(stats.eloTrajectory)
-                ? stats.eloTrajectory.length
-                : 0;
-            return matchCount >= 10;
-        });
+    // Filter out players without matches in the selected season, and inactive players if needed
+    let filteredPlayers = sortedPlayers.filter(player => isPlayerVisible(allStats[player.name]));
 
     // When sorting by daily change, also filter out players with 0 change
     if (sortBy === 'dailyChange') {

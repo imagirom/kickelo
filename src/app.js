@@ -13,6 +13,7 @@ import { PAUSE_DATES, PAUSE_MESSAGE, PAUSE_IMAGE_PATH } from './constants.js';
 import { getSelectedSeason } from './season-service.js';
 import { initializeNotifications } from './notification-service.js';
 import { initializeActivityHeatmap } from './activity-heatmap.js';
+import { initializeEloOverviewChart } from './elo-overview-chart.js';
 import { initializeTournamentUI } from './tournament/tournament-ui.js';
 import { handleRedirect, initSpotifyUI } from './audio/spotify-client.js';
 import { initDevMenu } from './dev-menu.js';
@@ -78,6 +79,7 @@ function goOnline() {
     // Initialize the UI components that depend on that data
     initializeLeaderboardDisplay();
     initializeRecentMatchesDisplay();
+    initializeEloOverviewChart();
     initializeActivityHeatmap();
     initializePlayerManager();
     initializeNotifications();
