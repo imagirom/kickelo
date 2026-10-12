@@ -19,7 +19,7 @@ async function openPhone(browser) {
   return { ctx, page };
 }
 
-const playerNames = (page) => page.$$eval('#teamA1 option', (os) => os.map((o) => o.value).filter((v) => v && v !== '__add_new__').slice(0, 6));
+const playerNames = (page) => page.$$eval('#teamA1 option', (os) => os.map((o) => o.value).filter((v) => v && v !== '__add_new__').slice(0, 8));
 
 // Programmatic lineup change the way Suggest / swaps / tournament prefill do it:
 // set all four selects, then notifyRolesChanged() fires lineup-changed once per team.
@@ -181,14 +181,14 @@ test('house props: at most count rows, a "No" bet shows on both feeds', async ({
   if (n > 0) {
     const desc = await rows.first().locator('.bets-prop-label').textContent();
     await rows.first().locator('.bets-prop-btn', { hasText: 'No' }).click();
-    await b.locator('.confirm-dialog select.bet-sheet-bettor').selectOption(names[1]);
+    await b.locator('.confirm-dialog select.bet-sheet-bettor').selectOption(names[6]);
     await b.locator('.confirm-dialog input[type=number]').fill('5');
     await b.locator('.confirm-btn-ok').click();
     // the "No" side is phrased positively, so it is a different text from the prop label
     for (const p of [b, a]) {
       const li = p.locator('#betsBox .bets-feed li');
       await expect(li).toHaveCount(1);
-      await expect(li).toContainText(names[1]);
+      await expect(li).toContainText(names[6]);
       expect((await li.locator('.bets-feed-what').textContent()).startsWith(`${desc} ·`)).toBe(false);
     }
   }
@@ -226,7 +226,7 @@ test('challenges: one of two concurrent accepts wins, withdraw hides Accept', as
   await expect(line(c, 10).locator('button', { hasText: 'Accept' })).toBeVisible();
 
   // B and C accept at the same time.
-  for (const [p, who] of [[b, names[5]], [c, names[0]]]) {
+  for (const [p, who] of [[b, names[5]], [c, names[6]]]) {
     await line(p, 10).locator('button', { hasText: 'Accept' }).click();
     await p.locator('.confirm-dialog select.challenge-acceptor').selectOption(who);
   }
@@ -371,7 +371,7 @@ test('pre-match challenges close at the first goal; results stay visible after t
     await expect(box).toContainText('live mode only', { timeout: 10000 });
 
     await box.locator('button', { hasText: 'Red wins' }).click();
-    await b.locator('.confirm-dialog select.bet-sheet-bettor').selectOption(names[1]);
+    await b.locator('.confirm-dialog select.bet-sheet-bettor').selectOption(names[6]);
     await b.getByRole('button', { name: '5', exact: true }).click();
     await expect(b.getByRole('button', { name: '5', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await b.locator('.confirm-btn-ok').click();
