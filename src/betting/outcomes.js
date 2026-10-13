@@ -67,6 +67,13 @@ function raw(match, { test, team, threshold }) {
 }
 
 export function evaluateOutcome(match, outcome) {
+  if (outcome.test === 'and') {
+    if (!Array.isArray(outcome.legs) || outcome.legs.length !== 2 || outcome.legs.some(leg => leg.test === 'and')) return null;
+    const results = outcome.legs.map(leg => evaluateOutcome(match, leg));
+    // An undecidable leg refunds the whole ticket, even if the other leg lost.
+    if (results.includes(null)) return null;
+    return results.every(Boolean);
+  }
   const r = raw(match, outcome);
   if (r === null) return null;
   return outcome.negate ? !r : r;
@@ -76,6 +83,7 @@ export const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '
 
 /** Plain-language outcome; a negated one is phrased positively ("X lose"), not as "Not: X win". */
 export function describeOutcome(outcome, labelOf) {
+  if (outcome.test === 'and') return (outcome.legs || []).map(leg => describeOutcome(leg, labelOf)).join(' AND ');
   const t = outcome.team ? labelOf(outcome.team) : '';
   const k = outcome.threshold;
   const [yes, no] = {
@@ -89,4 +97,12 @@ export function describeOutcome(outcome, labelOf) {
     comebackAtLeast: [`${t} comeback from ${k} down`, `No ${t} comeback from ${k} down`],
   }[outcome.test] || [outcome.test, `Not: ${outcome.test}`];
   return outcome.negate ? no : yes;
+}
+
+
+export function sameOutcome(a, b) {
+  if (!a || !b || a.test !== b.test) return false;
+  if (a.test === 'and') return a.legs?.length === 2 && b.legs?.length === 2 && a.legs.every((leg, i) => sameOutcome(leg, b.legs[i]));
+  return teamKey(a.team || []) === teamKey(b.team || [])
+    && (a.threshold ?? null) === (b.threshold ?? null) && Boolean(a.negate) === Boolean(b.negate);
 }

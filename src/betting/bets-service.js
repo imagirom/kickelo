@@ -5,6 +5,7 @@ import { allMatches } from '../match-data-service.js';
 import { BETTING } from './betting-config.js';
 import { computeBalances, checkBet, resolveHouseBet, resolveChallenge, dayKey, acceptDecision, deniedChallengeReason, spendable, creditId, canBorrow } from './ledger.js';
 import { getCurrentMatch } from './current-match-service.js';
+import { sameOutcome } from './outcomes.js';
 import { teamKey } from '../teams/team-identity.js';
 
 let allBets = [];
@@ -74,7 +75,12 @@ export async function placeHouseBet({ bettor, stake, outcome, expectedOdds, matc
   if (matchupKey !== undefined && cm.matchupKey !== matchupKey) throw new Error('changed');
   const { propId, ...rest } = outcome;
   let odds;
-  if (rest.test === 'winner') {
+  let combined;
+  if (rest.test === 'and') {
+    combined = cm.offer.combinations?.[rest.comboId];
+    if (!combined || !sameOutcome(rest, combined.outcome)) throw new Error('changed');
+    odds = combined.odds;
+  } else if (rest.test === 'winner') {
     odds = cm.offer.winner[teamKey(rest.team)];
   } else {
     const prop = (cm.offer.props || []).find((pr) => pr.id === propId);
@@ -84,7 +90,7 @@ export async function placeHouseBet({ bettor, stake, outcome, expectedOdds, matc
   if (expectedOdds !== undefined && odds !== expectedOdds) throw new Error('changed');
   const bet = {
     kind: 'house', matchupKey: cm.matchupKey, bettor, stake, odds,
-    outcome: {
+    outcome: combined ? combined.outcome : {
       test: rest.test, team: rest.team ? [...rest.team].sort() : null,
       threshold: rest.threshold ?? null, negate: Boolean(rest.negate),
     },

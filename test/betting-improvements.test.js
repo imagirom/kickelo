@@ -37,3 +37,59 @@ test('credit adds ten now and deducts thirteen from the next active allowance', 
   assert.equal(creditId('S', now), creditId('S', now + 1000));
   assert.equal(canBorrow('New', [], [], now), false);
 });
+
+test('AND odds account for correlation and reject impossible or redundant pairs', async () => {
+  const { buildCombinations } = await import('../src/betting/combinations.js');
+  const { BETTING } = await import('../src/betting/betting-config.js');
+  const { toOdds } = await import('../src/betting/model.js');
+  const offer = buildCombinations(['A', 'B'], ['C', 'D'], 0, { s: 1200, c: 0, kappa: Infinity }, BETTING, [
+    { outcome: { test: 'scoresFirst', team: ['A', 'B'] } },
+    { outcome: { test: 'marginAtLeast', team: ['A', 'B'], threshold: 2 } },
+    { outcome: { test: 'durationOver', threshold: 300 } },
+  ]);
+  const combos = Object.values(offer.combinations);
+  const winAndFirst = combos.find(c => c.left === 's0' && c.right === 's2');
+  // P(red wins | red scores first) = 163/256, so the joint probability is 163/512.
+  assert.equal(winAndFirst.odds, toOdds(163 / 512));
+  assert.notEqual(winAndFirst.odds, toOdds(0.5) ** 2);
+  assert.equal(combos.some(c => c.left === 's0' && c.right === 's1'), false); // both teams win
+  assert.equal(combos.some(c => c.left === 's0' && c.right === 's4'), false); // win AND win by 2
+  assert.equal(offer.comboSelections.length, 8);
+  assert.equal(offer.comboSelections.some(s => s.outcome.test === 'durationOver'), true);
+  const match = { teamA: ['A', 'B'], teamB: ['C', 'D'], winner: 'A', goalsA: 5, goalsB: 2,
+    goalLog: [{ team: 'red', timestamp: 1000 }] };
+  assert.equal(evaluateOutcome(match, winAndFirst.outcome), true);
+  assert.equal(evaluateOutcome({ ...match, winner: 'B' }, winAndFirst.outcome), false);
+  assert.equal(evaluateOutcome({ ...match, goalLog: [] }, winAndFirst.outcome), null);
+});
+
+
+test('duration AND bets price both sides and settle at the last goal', async () => {
+  const { buildCombinations } = await import('../src/betting/combinations.js');
+  const { BETTING } = await import('../src/betting/betting-config.js');
+  const { outcomeProbability, toOdds } = await import('../src/betting/model.js');
+  const { resolveHouseBet } = await import('../src/betting/ledger.js');
+  const params = { s: 1200, c: 0, kappa: Infinity, duration: { lambda: 300, k: 2, b: 0 } };
+  const offer = buildCombinations(['A', 'B'], ['C', 'D'], 0, params, BETTING, [
+    { outcome: { test: 'durationOver', threshold: 300 } },
+    { outcome: { test: 'durationOver', threshold: 360 } },
+  ]);
+  const pOver = outcomeProbability({ test: 'durationOver', threshold: 300 }, 0, params);
+  const over = offer.combinations.s0_s2;
+  const under = offer.combinations.s0_s3;
+  assert.equal(over.odds, toOdds(0.5 * pOver));
+  assert.equal(under.odds, toOdds(0.5 * (1 - pOver)));
+  assert.equal(offer.combinations.s2_s3, undefined); // over AND not-over same threshold
+  assert.equal(offer.combinations.s2_s4, undefined); // two nested overs are redundant
+  assert.equal(offer.combinations.s2_s5.odds, toOdds(pOver - outcomeProbability({ test: 'durationOver', threshold: 360 }, 0, params)));
+  const start = new Date(2026, 9, 13, 12).getTime();
+  const match = { id: 'duration-match', teamA: ['A', 'B'], teamB: ['C', 'D'], winner: 'A', goalsA: 5, goalsB: 0,
+    matchStartedAtMs: start, timestamp: start + 900000, matchDuration: 330000,
+    goalLog: [10000, 60000, 120000, 240000, 330000].map(timestamp => ({ team: 'red', timestamp })) };
+  const bet = { kind: 'house', matchupKey: 'A::B|C::D', bettor: 'S', placedAt: start - 1000, stake: 10,
+    outcome: over.outcome, odds: over.odds };
+  assert.equal(resolveHouseBet(bet, [match], start + 900000).payout, Math.round(10 * over.odds));
+  assert.equal(resolveHouseBet({ ...bet, ...under }, [match], start + 900000).status, 'lost');
+  assert.equal(evaluateOutcome({ ...match, goalLog: [...match.goalLog.slice(0, -1), { team: 'red', timestamp: 300000 }] }, under.outcome), true);
+  assert.equal(resolveHouseBet(bet, [{ ...match, goalLog: [] }], start + 900000).status, 'refunded');
+});

@@ -4,6 +4,7 @@ import { matchupKey, isFullLineup } from './matchup.js';
 import { winProbability, toOdds } from './model.js';
 import { teamKey } from '../teams/team-identity.js';
 import { propsActive } from './betting-config.js';
+import { buildCombinations } from './combinations.js';
 import { candidateProps, eligible, drawProps } from './props.js';
 
 const avg = (pair, eloOf) => (eloOf(pair[0]) + eloOf(pair[1])) / 2;
@@ -18,6 +19,7 @@ export function buildOffer(red, blue, eloOf, params, cfg, seed = '') {
   return {
     winner: { [teamKey(red)]: toOdds(pRed, cfg), [teamKey(blue)]: toOdds(1 - pRed, cfg) },
     gap: Math.round(gap),
+    ...(cfg.combinations ? buildCombinations(red, blue, gap, params, cfg, props) : {}),
     props,
   };
 }

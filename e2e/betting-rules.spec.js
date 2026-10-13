@@ -87,3 +87,16 @@ test('credit is a fixed, immutable advance with at most one entry per player and
   expect(await allowed(setDoc(ref, loan))).toBe(false);
   expect(await allowed(updateDoc(ref, { void: true }))).toBe(false);
 });
+
+test('AND bets must match the published conditions and joint odds', async () => {
+  const outcome = { test: 'and', comboId: 's0_s1', legs: [
+    { test: 'winner', team: ['A', 'B'], threshold: null, negate: false },
+    { test: 'scoresFirst', team: ['A', 'B'], threshold: null, negate: false },
+  ] };
+  await updateDoc(doc(db, 'meta', 'currentMatch'), { 'offer.combinations': { s0_s1: { outcome, odds: 3 } } });
+  expect(await allowed(addDoc(collection(db, 'bets'), house({ outcome, odds: 3 })))).toBe(true);
+  expect(await allowed(addDoc(collection(db, 'bets'), house({ outcome, odds: 4 })))).toBe(false);
+  expect(await allowed(addDoc(collection(db, 'bets'), house({ outcome: { ...outcome, legs: outcome.legs.slice(0, 1) }, odds: 3 })))).toBe(false);
+  await updateDoc(doc(db, 'meta', 'currentMatch'), { firstGoalAt: serverTimestamp() });
+  expect(await allowed(addDoc(collection(db, 'bets'), house({ outcome, odds: 3 })))).toBe(false);
+});

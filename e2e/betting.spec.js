@@ -181,14 +181,14 @@ test('house props: at most count rows, a "No" bet shows on both feeds', async ({
   if (n > 0) {
     const desc = await rows.first().locator('.bets-prop-label').textContent();
     await rows.first().locator('.bets-prop-btn', { hasText: 'No' }).click();
-    await b.locator('.confirm-dialog select.bet-sheet-bettor').selectOption(names[1]);
+    await b.locator('.confirm-dialog select.bet-sheet-bettor').selectOption(names[4]);
     await b.locator('.confirm-dialog input[type=number]').fill('5');
     await b.locator('.confirm-btn-ok').click();
     // the "No" side is phrased positively, so it is a different text from the prop label
     for (const p of [b, a]) {
       const li = p.locator('#betsBox .bets-feed li');
       await expect(li).toHaveCount(1);
-      await expect(li).toContainText(names[1]);
+      await expect(li).toContainText(names[4]);
       expect((await li.locator('.bets-feed-what').textContent()).startsWith(`${desc} ·`)).toBe(false);
     }
   }

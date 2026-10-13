@@ -65,14 +65,13 @@ npm run test:tournament
 
 ## Firebase Emulators
 
-`firebase.json` defines emulator ports for Firestore/Auth/Storage/Hosting. The emulator connection code is present but commented out in `src/firebase-service.js`. To use the emulators:
-
-1. Uncomment the `connectFirestoreEmulator`, `connectAuthEmulator`, and `connectStorageEmulator` block in `src/firebase-service.js`.
-2. Start the emulators:
+`firebase.json` defines emulator ports. In development mode, `src/firebase-service.js` automatically connects to Firestore (7070) and Auth (9099). Start these alongside Vite:
 
 ```bash
-firebase emulators:start
+npx firebase-tools emulators:start --only firestore,auth --import=./firebase_emulator_cache
 ```
+
+See the golden-football betting section below for local login and test instructions.
 
 ## Tournaments
 
@@ -171,3 +170,24 @@ These were created by and used mainly for use with AI tools.
 - `overview.md`: Current architecture and feature overview
 - `BATCH_STATS.md`: Batch stats computation details
 - `PAUSE_FEATURE.md`, `vibration_tracking.md`, `waiting_karma.md`: Feature docs
+
+## Golden-football betting
+
+- Live match duration ends at the final goal. The clock stops when a team reaches five and resumes if that goal is removed. New matches retain their start time separately so delayed submission does not change the betting cutoff; older matches remain supported.
+- **ALL IN** fills the stake with the selected bettor's available balance, including an unclaimed daily allowance, up to the existing 10,000-ball stake limit.
+- With an empty wallet, **Borrow 10 · repay 13** advances ten balls. Thirteen are deducted from the next daily allowance earned by betting on a later day, leaving seven of the usual twenty. Only one loan may be outstanding, with at most one advance per UTC day. Loans cannot be undone; undoing a bet does not cancel its loan. Like existing stakes, affordability is checked by the shared-account client; rules enforce the fixed loan terms, immutable entries and daily duplicate protection.
+- The normal board shows the two winner buttons and two Yes/No prop rows (four additional choices).
+- **Advanced betting** is collapsed by default. **Combine two bets (AND)** joins two predictions on the current match. Both must win. Scoring combinations use the existing goal-sequence model, accounting for correlation. Combinations involving duration use the fitted duration probability and assume duration and scoring are independent conditional on the Elo gap. This is a pricing approximation; the normal house margin is applied once and the odds cap is retained. The selector excludes impossible and redundant combinations. The picker uses the winner selections and the props currently offered on the normal board; both Yes and No sides of duration bets can be combined too. Missing result data refunds the entire ticket. Betting closes at the first goal.
+
+Deploy the updated `firestore.rules` together with the frontend for credit and combined bets. Existing published lineups gain AND offers when the next match is published.
+
+For a local preview, use Node 22.12+ and Java 21+, then run:
+
+```bash
+npm ci
+npx firebase-tools emulators:start --only firestore,auth --import=./firebase_emulator_cache
+# In another terminal:
+npm run dev
+```
+
+Development mode automatically connects to the local Firestore and Auth emulators. Tests create an emulator-only login with password `test-password-e2e` (`node -e "import('./e2e/helpers.js').then(m => m.ensureTestUser())"`). Run `npm test` for logic tests and `npm run test:e2e -- --workers=1` for browser/rules checks; one worker is required because they share emulator data.

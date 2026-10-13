@@ -4,7 +4,8 @@ export const BETTING = {
   enabled: true,            // master switch: nothing betting-related renders, syncs or writes when false
   liveSync: true,           // publish/subscribe meta/currentMatch (shared live view); house bets need it
   houseWinner: true,
-  houseProps: { enabled: false, count: 2, maxRatio: 3, minSamples: 30 },   // phase 2
+  combinations: true,       // two conditions on the same match, priced jointly
+  houseProps: { enabled: true, count: 2, maxRatio: 3, minSamples: 30 },   // phase 2
   challenges: false,                                                      // phase 3
   margin: 0.05,
   oddsClamp: [1.05, 10],

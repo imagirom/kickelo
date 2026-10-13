@@ -212,6 +212,9 @@ service cloud.firestore {
                 && request.resource.data.odds is number && request.resource.data.odds >= 1 && request.resource.data.odds <= 10
                 && currentMatch().firstGoalAt == null
                 && currentMatch().offer != null
+                && (request.resource.data.outcome.test != 'and'
+                  || (request.resource.data.outcome == currentMatch().offer.combinations[request.resource.data.outcome.comboId].outcome
+                    && request.resource.data.odds == currentMatch().offer.combinations[request.resource.data.outcome.comboId].odds))
                 && (request.resource.data.outcome.test != 'winner'
                   || request.resource.data.odds in currentMatch().offer.winner.values()))
               ||

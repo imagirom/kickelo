@@ -20,6 +20,7 @@ import { isLiveOnThisDevice } from './sync-controller.js';
 const BETTOR_KEY = 'betting.bettor';
 let initialized = false;
 let timerId = null;
+let advancedMatchupKey = null;
 
 const label = (pair = []) => getTeamRecord(teamKey(pair))?.name || pair.join(' + ');
 
@@ -113,11 +114,56 @@ function renderHouse(cm) {
     }
     row.appendChild(line);
   }
+  if (Object.keys(cm.offer.combinations || {}).length) {
+    const advanced = el('details', 'bets-advanced');
+    advanced.open = advancedMatchupKey === cm.matchupKey;
+    advanced.appendChild(el('summary', '', 'Advanced betting'));
+    advanced.addEventListener('toggle', () => {
+      if (advanced.isConnected) advancedMatchupKey = advanced.open ? cm.matchupKey : null;
+    });
+    const combine = el('button', 'bets-combine-btn', 'Combine two bets (AND)…');
+    combine.type = 'button';
+    combine.addEventListener('click', () => openCombinationSheet(cm));
+    advanced.appendChild(combine);
+    row.appendChild(advanced);
+  }
   // Only the live-scoring phone writes goals: without live mode the cutoff is unknown and every house bet is refunded.
   const live = Boolean(cm.liveStartedAt || cm.liveId);
   row.appendChild(el('div', 'bets-caption', live ? 'Closes at first goal'
     : 'Closes at first goal · live mode only'));
   return row;
+}
+
+async function openCombinationSheet(cm) {
+  const sheet = el('div', 'bet-sheet');
+  const first = el('select', 'combo-first');
+  const second = el('select', 'combo-second');
+  const preview = el('div', 'combo-preview');
+  const selections = cm.offer.comboSelections;
+  const combos = Object.values(cm.offer.combinations);
+  const usable = selections.filter(s => combos.some(c => c.left === s.id || c.right === s.id));
+  fillSelect(first, usable.map(s => [s.id, describeOutcome(s.outcome, label)]));
+  function selected() {
+    return combos.find(c => (c.left === first.value && c.right === second.value) || (c.right === first.value && c.left === second.value));
+  }
+  function updatePreview() {
+    const combo = selected();
+    preview.textContent = combo ? `${describeOutcome(combo.outcome, label)} · ${fmtOdds(combo.odds)}` : '';
+  }
+  function updateOptions() {
+    const options = selections.filter(s => combos.some(c => (c.left === first.value && c.right === s.id) || (c.right === first.value && c.left === s.id)));
+    fillSelect(second, options.map(s => [s.id, describeOutcome(s.outcome, label)]), second.value);
+    updatePreview();
+  }
+  first.addEventListener('change', updateOptions);
+  second.addEventListener('change', updatePreview);
+  updateOptions();
+  sheet.append(el('div', 'bet-sheet-title', 'Combine two predictions'), field('First condition', first),
+    field('AND', second), preview, el('div', 'bets-caption', 'Both must happen to win. Related outcomes are priced together. Impossible or redundant pairs are excluded. If a result is unavailable, the whole bet is refunded.'));
+  const ok = await showConfirm('', { contentElement: sheet, confirmLabel: 'Choose stake', cancelLabel: 'Cancel' });
+  const combo = selected();
+  if (ok && combo) await openBetSheet({ outcome: combo.outcome, odds: combo.odds,
+    title: describeOutcome(combo.outcome, label), matchupKey: cm.matchupKey });
 }
 
 function renderChallengeButton(cm) {
@@ -507,7 +553,7 @@ async function openBetSheet({ outcome, odds, title, matchupKey: key }) {
     const creditState = creditStatus(bettorSelect.value);
     credit.hidden = !bettorSelect.value || (balance > 0 && !creditState.debt);
     borrow.hidden = !creditState.canBorrow && !borrowing;
-    borrow.disabled = borrowing;
+    borrow.disabled = borrowing || !creditState.canBorrow;
     creditNote.textContent = creditState.debt
       ? `${creditState.debt} will be deducted from your next ${BETTING.dailyAllowance}-ball allowance.`
       : `Receive ${BETTING.credit.advance} now; your next allowance is ${BETTING.dailyAllowance - BETTING.credit.repayment} instead of ${BETTING.dailyAllowance}. One outstanding loan, at most once per UTC day.`;
