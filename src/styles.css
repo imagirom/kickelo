@@ -2455,7 +2455,7 @@ body.paused > *:not(#pauseOverlay) {
 .bets-feed-result.won { color: #f2c230; }
 .bet-sheet { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
 .bet-sheet-title { font-weight: 600; }
-.bet-sheet-chips { display: flex; gap: 8px; align-items: center; }
+.bet-sheet-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .bet-chip { flex: 0 0 auto; width: auto; min-width: 44px; min-height: 44px; padding: 6px 12px; }
 .bet-sheet-stake { flex: 1; min-width: 0; min-height: 44px; box-sizing: border-box; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--input-border-color); background: var(--gray-dark); color: var(--text-color-primary); }
 .bet-sheet-info { font-size: 0.9em; color: var(--text-color-secondary); font-variant-numeric: tabular-nums; }

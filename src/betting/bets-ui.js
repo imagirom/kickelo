@@ -472,7 +472,13 @@ async function openBetSheet({ outcome, odds, title, matchupKey: key }) {
     chips.appendChild(btn);
     return [btn, chip];
   });
-  chips.appendChild(stakeInput);
+  const allIn = el('button', 'bet-chip bet-all-in', 'ALL IN');
+  allIn.type = 'button';
+  allIn.addEventListener('click', () => {
+    stakeInput.value = String(Math.min(BETTING.maxStake, available(bettorSelect.value)));
+    update();
+  });
+  chips.append(allIn, stakeInput);
 
   const info = el('div', 'bet-sheet-info');
   function update() {
@@ -482,6 +488,8 @@ async function openBetSheet({ outcome, odds, title, matchupKey: key }) {
       btn.setAttribute('aria-pressed', String(chip === stake));
     }
     const balance = bettorSelect.value ? available(bettorSelect.value) : 0;
+    allIn.disabled = !bettorSelect.value || balance < 1;
+    allIn.title = balance > BETTING.maxStake ? `Maximum stake: ${BETTING.maxStake}` : 'Stake all available golden footballs';
     amounts(info, [['Payout:', Math.round(stake * odds)], ['Balance:', balance]]);
     guardBalance(sheet, info, bettorSelect.value && stake > balance ? [bettorSelect.value] : []);
   }
@@ -492,7 +500,11 @@ async function openBetSheet({ outcome, odds, title, matchupKey: key }) {
   sheet.append(field('Bettor', bettorSelect), chips, info);
   const pending = showConfirm('', { contentElement: sheet, confirmLabel: 'Place bet', cancelLabel: 'Cancel' });
   update(); // the dialog exists now: guard its confirm button
+  window.addEventListener('bets-updated', update);
+  window.addEventListener('matches-updated', update);
   const ok = await pending;
+  window.removeEventListener('bets-updated', update);
+  window.removeEventListener('matches-updated', update);
   if (!ok) return;
 
   const bettor = bettorSelect.value;
