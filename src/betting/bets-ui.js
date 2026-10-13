@@ -12,7 +12,7 @@ import { BETTING, houseBetsActive } from './betting-config.js';
 import { describeOutcome, OUTCOME_TESTS, mmss } from './outcomes.js';
 import { isLockedIn, resolveHouseBet, resolveChallenge, dayKey } from './ledger.js';
 import { getCurrentMatch } from './current-match-service.js';
-import { getBets, placeHouseBet, undoBet, available, placeChallenge, acceptChallenge, withdrawChallenge } from './bets-service.js';
+import { getBets, placeHouseBet, undoBet, available, allowanceStatus, placeChallenge, acceptChallenge, withdrawChallenge } from './bets-service.js';
 import { footballs, GF_ICON_SRC } from './currency.js';
 import { isLiveOnThisDevice } from './sync-controller.js';
 
@@ -474,13 +474,18 @@ async function openBetSheet({ outcome, odds, title, matchupKey: key }) {
   chips.appendChild(stakeInput);
 
   const info = el('div', 'bet-sheet-info');
+  const allowance = el('p', 'bet-sheet-allowance');
   function update() {
     const stake = Number(stakeInput.value) || 0;
     for (const [btn, chip] of chipButtons) {
       btn.classList.toggle('active', chip === stake);
       btn.setAttribute('aria-pressed', String(chip === stake));
     }
-    const balance = bettorSelect.value ? available(bettorSelect.value) : 0;
+    const wallet = bettorSelect.value ? allowanceStatus(bettorSelect.value) : null;
+    const balance = wallet?.balance ?? 0;
+    allowance.textContent = wallet
+      ? `Today's allowance: ${wallet.allowance} golden footballs (${wallet.allowanceCredited ? 'already included' : 'included when you bet'}). Next time: your total stakes today, up to ${BETTING.dailyAllowance}. Refunded bets do not count.`
+      : `Start with ${BETTING.dailyAllowance} golden footballs. After that, each active day's allowance matches your stakes on the previous active day, up to ${BETTING.dailyAllowance}.`;
     amounts(info, [['Payout:', Math.round(stake * odds)], ['Balance:', balance]]);
     guardBalance(sheet, info, bettorSelect.value && stake > balance ? [bettorSelect.value] : []);
   }
@@ -488,7 +493,7 @@ async function openBetSheet({ outcome, odds, title, matchupKey: key }) {
   bettorSelect.addEventListener('change', update);
   update();
 
-  sheet.append(field('Bettor', bettorSelect), chips, info);
+  sheet.append(field('Bettor', bettorSelect), chips, info, allowance);
   const pending = showConfirm('', { contentElement: sheet, confirmLabel: 'Place bet', cancelLabel: 'Cancel' });
   update(); // the dialog exists now: guard its confirm button
   const ok = await pending;

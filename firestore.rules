@@ -190,10 +190,11 @@ service cloud.firestore {
             && request.resource.data.matchupKey == currentMatch().matchupKey
             && request.resource.data.placedAt == request.time
             && request.resource.data.void == false
+            && request.resource.data.allowancePolicy == 2
             && request.resource.data.outcome.test is string
             && (
               (isHouse()
-                && request.resource.data.keys().hasOnly(['kind', 'matchupKey', 'placedAt', 'outcome', 'void', 'bettor', 'stake', 'odds'])
+                && request.resource.data.keys().hasOnly(['kind', 'allowancePolicy', 'matchupKey', 'placedAt', 'outcome', 'void', 'bettor', 'stake', 'odds'])
                 && isName(request.resource.data.bettor)
                 && isStake(request.resource.data.stake)
                 // 10 = BETTING.oddsClamp max; winner odds must be the published ones
@@ -204,7 +205,7 @@ service cloud.firestore {
                   || request.resource.data.odds in currentMatch().offer.winner.values()))
               ||
               (isChallenge()
-                && request.resource.data.keys().hasOnly(['kind', 'matchupKey', 'placedAt', 'outcome', 'void', 'challenger', 'opponent',
+                && request.resource.data.keys().hasOnly(['kind', 'allowancePolicy', 'matchupKey', 'placedAt', 'outcome', 'void', 'challenger', 'opponent',
                   'challengerStake', 'opponentStake', 'acceptedBy', 'acceptedAt'])
                 && isName(request.resource.data.challenger)
                 && (request.resource.data.opponent == null

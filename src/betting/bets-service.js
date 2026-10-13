@@ -3,7 +3,7 @@
 import { db, collection, doc, addDoc, updateDoc, onSnapshot, serverTimestamp, runTransaction, getDoc } from '../firebase-service.js';
 import { allMatches } from '../match-data-service.js';
 import { BETTING } from './betting-config.js';
-import { computeBalances, checkBet, resolveHouseBet, resolveChallenge, dayKey, acceptDecision, deniedChallengeReason } from './ledger.js';
+import { computeBalances, checkBet, resolveHouseBet, resolveChallenge, walletAvailable, acceptDecision, deniedChallengeReason } from './ledger.js';
 import { getCurrentMatch } from './current-match-service.js';
 import { teamKey } from '../teams/team-identity.js';
 
@@ -44,14 +44,13 @@ export function getOpenBetsFor(key) {
     || (b.kind === 'challenge' && ['open', 'pending'].includes(resolveChallenge(b, matches, now).status))));
 }
 
-/** Spendable now: wallet balance, plus today's allowance if no bet placed today. */
+/** Includes today's allowance exactly once, using the previous active day's stakes. */
 export function available(bettor) {
-  const w = getBalances().get(bettor);
-  const today = dayKey(Date.now());
-  const hasBetToday = allBets.some((b) => !b.void && (
-    ((b.bettor === bettor || b.challenger === bettor) && dayKey(b.placedAt) === today)
-    || (b.acceptedBy === bettor && typeof b.acceptedAt === 'number' && dayKey(b.acceptedAt) === today)));
-  return (w?.balance ?? 0) + (hasBetToday ? 0 : BETTING.dailyAllowance);
+  return walletAvailable(bettor, allBets, allMatches || [], Date.now()).balance;
+}
+
+export function allowanceStatus(bettor) {
+  return walletAvailable(bettor, allBets, allMatches || [], Date.now());
 }
 
 /** outcome: { test, team, threshold?, negate?, propId? }; propId (prop bets) is only used to look up odds.
@@ -71,7 +70,7 @@ export async function placeHouseBet({ bettor, stake, outcome, expectedOdds, matc
   }
   if (expectedOdds !== undefined && odds !== expectedOdds) throw new Error('changed');
   const bet = {
-    kind: 'house', matchupKey: cm.matchupKey, bettor, stake, odds,
+    kind: 'house', allowancePolicy: 2, matchupKey: cm.matchupKey, bettor, stake, odds,
     outcome: {
       test: rest.test, team: rest.team ? [...rest.team].sort() : null,
       threshold: rest.threshold ?? null, negate: Boolean(rest.negate),
@@ -112,7 +111,7 @@ export async function placeChallenge({ challenger, opponent, outcome, challenger
   if (!cm?.matchupKey) throw new Error('closed');
   if (matchupKey !== undefined && cm.matchupKey !== matchupKey) throw new Error('changed');
   const bet = {
-    kind: 'challenge', matchupKey: cm.matchupKey, challenger, opponent: opponent || null, challengerStake, opponentStake,
+    kind: 'challenge', allowancePolicy: 2, matchupKey: cm.matchupKey, challenger, opponent: opponent || null, challengerStake, opponentStake,
     outcome: {
       test: outcome.test, team: outcome.team ? [...outcome.team].sort() : null,
       threshold: outcome.threshold ?? null, negate: Boolean(outcome.negate),

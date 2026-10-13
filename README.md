@@ -171,3 +171,22 @@ These were created by and used mainly for use with AI tools.
 - `overview.md`: Current architecture and feature overview
 - `BATCH_STATS.md`: Batch stats computation details
 - `PAUSE_FEATURE.md`, `vibration_tracking.md`, `waiting_karma.md`: Feature docs
+
+## Golden-football allowances
+
+New bettors start with 20 golden footballs. On each later active day, the allowance
+matches the total staked on the previous active day, capped at 20. Staking 4 balls
+means an allowance of 4 next time; idle days add nothing. Winnings remain in the
+wallet. Multiple bets are added together, including both winning and losing bets.
+Voided, refunded and cancelled bets do not earn allowances; days containing only
+those bets are skipped. Open stakes count provisionally until the result is known.
+
+New bets store `allowancePolicy: 2`. Existing bets retain their original 20-ball
+allowances, including on a day with both old and new bets, so historical credits
+are preserved without rewriting data. The first new day uses the last active day's
+eligible stakes, including legacy stakes. Deploy the updated client and Firestore
+rules together: new writes must include the policy, and it cannot be changed later.
+Old clients must reload before placing another bet. Like the existing wallet,
+allowances are derived from bets and matches; editing or deleting a match can change
+the eligibility of its stakes. Matching stakes limits the small-stake allowance
+loophole; it does not prevent hedging opposite outcomes.
