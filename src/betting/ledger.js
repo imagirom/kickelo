@@ -13,6 +13,8 @@ export function dayKey(ms) {
 
 export function firstGoalAt(match) {
   if (!Array.isArray(match.goalLog) || match.goalLog.length === 0) return null;
+  if (Number.isFinite(match.matchStartedAtMs)) return match.matchStartedAtMs + match.goalLog[0].timestamp;
+  // Legacy matches stored the elapsed time at submission.
   if (typeof match.matchDuration !== 'number' || typeof match.timestamp !== 'number') return null;
   return match.timestamp - match.matchDuration + match.goalLog[0].timestamp;
 }

@@ -16,7 +16,7 @@
     "test:e2e": "npx playwright test",
     "test": "npm run test:stats && npm run test:cache && npm run test:edit && npm run test:tournament && npm run test:audio && npm run test:teams && npm run test:devmenu && npm run test:betting",
     "test:devmenu": "node test/dev-menu.test.js",
-    "test:betting": "node test/betting.test.js"
+    "test:betting": "node test/betting.test.js && node --test test/betting-improvements.test.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",

@@ -14,6 +14,7 @@ import {
     positionConfirmationContainer, positionsConfirmedCheckbox,
     rankedMatchContainer, rankedMatchCheckbox
 } from './dom-elements.js';
+import { lastGoalMs, liveElapsedMs, isDecided } from './match-timing.js';
 import { MAX_GOALS, STARTING_ELO } from './constants.js';
 import { emit } from './audio/sound-events.js';
 import { unlock, preload } from './audio/sfx-player.js';
@@ -316,7 +317,7 @@ export function setupMatchForm() {
             parsedGoalsA, parsedGoalsB, season, {
                 isRanked: rankedForDiff,
                 goalLogData: liveMode ? goalLog.slice() : null,
-                matchDurationMs: liveMode && matchStartTime ? Date.now() - matchStartTime : 0,
+                matchDurationMs: liveMode ? lastGoalMs(goalLog) ?? 0 : 0,
             }
         );
         if (emojiDiffEl) {
@@ -366,7 +367,7 @@ export function setupMatchForm() {
                 pairingMetadata,
                 positionsConfirmed: positionsConfirmedState,
                 ranked: rankedMatchState ?? true,
-                ...(liveMode && goalLog.length > 0 ? { goalLog: goalLog.slice(), matchDuration: Date.now() - matchStartTime } : {})
+                ...(liveMode && goalLog.length > 0 ? { goalLog: goalLog.slice(), matchDuration: lastGoalMs(goalLog), matchStartedAtMs: matchStartTime } : {})
             };
 
             // Add tournament fields if playing a tournament game
@@ -706,7 +707,7 @@ function startLiveMatchTimer() {
     timerElem.style.display = 'inline-block';
     function updateTimer() {
         if (!liveMode || !matchStartTime) return;
-        const elapsed = Date.now() - matchStartTime;
+        const elapsed = liveElapsedMs(goalLog, Date.now() - matchStartTime);
         timerElem.textContent = formatMsToMMSS(elapsed);
     }
     updateTimer();
@@ -773,15 +774,15 @@ function updateScoredButtons() {
     }
     const redGoals = goalLog.filter(g => g.team === 'red').length;
     const blueGoals = goalLog.filter(g => g.team === 'blue').length;
-    btnRedScored.disabled = redGoals >= MAX_GOALS;
-    btnBlueScored.disabled = blueGoals >= MAX_GOALS;
+    btnRedScored.disabled = isDecided(goalLog);
+    btnBlueScored.disabled = isDecided(goalLog);
 }
 
 btnRedScored.addEventListener('click', () => {
     if (!liveMode) return;
     const redGoals = goalLog.filter(g => g.team === 'red').length;
     const blueGoals = goalLog.filter(g => g.team === 'blue').length;
-    if (redGoals >= MAX_GOALS) return;
+    if (isDecided(goalLog)) return;
     const danger = isDangerZone(redGoals, blueGoals, 'red');
     const fourFour = isFourFour(redGoals, blueGoals, 'red');
     goalLog.push({ team: 'red', timestamp: Date.now() - matchStartTime });
@@ -796,7 +797,7 @@ btnBlueScored.addEventListener('click', () => {
     if (!liveMode) return;
     const redGoals = goalLog.filter(g => g.team === 'red').length;
     const blueGoals = goalLog.filter(g => g.team === 'blue').length;
-    if (blueGoals >= MAX_GOALS) return;
+    if (isDecided(goalLog)) return;
     const danger = isDangerZone(redGoals, blueGoals, 'blue');
     const fourFour = isFourFour(redGoals, blueGoals, 'blue');
     goalLog.push({ team: 'blue', timestamp: Date.now() - matchStartTime });

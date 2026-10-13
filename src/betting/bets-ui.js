@@ -1,6 +1,7 @@
 // src/betting/bets-ui.js
 // Bets box under the match form: shared match header, live view for spectators,
 // house winner odds, place-bet sheet and today's bet feed for this matchup.
+import { liveElapsedMs } from '../match-timing.js';
 import { allPlayers } from '../player-data-service.js';
 import { allMatches } from '../match-data-service.js';
 import { teamKey } from '../teams/team-identity.js';
@@ -46,13 +47,13 @@ function renderLive(cm) {
   const red = goals.filter((g) => g.team === 'red').length;
   const row = el('div', 'bets-live');
   const top = el('div', 'bets-live-top');
-  const timer = el('span', 'live-timer', formatMsToMMSS(Date.now() - startedMs));
+  const timer = el('span', 'live-timer', formatMsToMMSS(liveElapsedMs(goals, Date.now() - startedMs)));
   timer.dataset.startedMs = String(startedMs);
   top.append(el('span', 'bets-live-dot', '● LIVE'), timer, el('span', 'bets-live-score', `${red} : ${goals.length - red}`));
   row.appendChild(top);
   const tl = el('div', 'bets-timeline');
   tl.goals = goals;
-  drawTimeline(tl, Date.now() - startedMs);
+  drawTimeline(tl, liveElapsedMs(goals, Date.now() - startedMs));
   row.appendChild(tl);
   return row;
 }
@@ -519,9 +520,9 @@ async function openBetSheet({ outcome, odds, title, matchupKey: key }) {
 function tickTimer() {
   const timer = document.querySelector('#betsContent .live-timer');
   if (!timer) return;
-  const elapsed = Date.now() - Number(timer.dataset.startedMs);
-  timer.textContent = formatMsToMMSS(elapsed);
   const tl = document.querySelector('#betsContent .bets-timeline');
+  const elapsed = liveElapsedMs(tl?.goals, Date.now() - Number(timer.dataset.startedMs));
+  timer.textContent = formatMsToMMSS(elapsed);
   if (tl) drawTimeline(tl, elapsed);
 }
 
