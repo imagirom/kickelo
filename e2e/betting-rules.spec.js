@@ -27,15 +27,20 @@ test.beforeEach(async ({}, testInfo) => {
 test.afterAll(async () => { await resetBettingState(); });
 
 const allowed = (p) => p.then(() => true, (e) => { if (e?.code !== 'permission-denied') throw e; return false; });
-const house = (extra = {}) => ({ kind: 'house', matchupKey: KEY, bettor: 'S', stake: 10, odds: 1.8,
+const house = (extra = {}) => ({ kind: 'house', allowancePolicy: 2, matchupKey: KEY, bettor: 'S', stake: 10, odds: 1.8,
   outcome: { test: 'winner', team: ['A', 'B'], threshold: null, negate: false }, void: false, placedAt: serverTimestamp(), ...extra });
-const challenge = (extra = {}) => ({ kind: 'challenge', matchupKey: KEY, challenger: 'S', opponent: null, challengerStake: 10, opponentStake: 10,
+const challenge = (extra = {}) => ({ kind: 'challenge', allowancePolicy: 2, matchupKey: KEY, challenger: 'S', opponent: null, challengerStake: 10, opponentStake: 10,
   outcome: { test: 'goesToFourFour', team: null, threshold: null, negate: false }, acceptedBy: null, acceptedAt: null, void: false, placedAt: serverTimestamp(), ...extra });
 const addBet = (data) => addDoc(collection(db, 'bets'), data);
 const closeBetting = () => updateDoc(doc(db, 'meta', 'currentMatch'), { firstGoalAt: serverTimestamp(), goalLog: [{ team: 'red', timestamp: 1000 }] });
 
 test('house bets: published odds only, whole bounded stakes, no extra keys', async () => {
   expect(await allowed(addBet(house()))).toBe(true);
+  const { allowancePolicy, ...legacy } = house();
+  expect(await allowed(addBet(legacy))).toBe(false);
+  expect(await allowed(addBet(house({ allowancePolicy: 1 })))).toBe(false);
+  const current = await addBet(house());
+  expect(await allowed(updateDoc(current, { allowancePolicy: 1 }))).toBe(false);
   expect(await allowed(addBet(house({ odds: 1000 })))).toBe(false);
   expect(await allowed(addBet(house({ odds: 1.9 })))).toBe(false); // winner odds not in the offer
   expect(await allowed(addBet(house({ odds: 11, outcome: { test: 'shutout', team: ['A', 'B'], threshold: null, negate: false } })))).toBe(false);

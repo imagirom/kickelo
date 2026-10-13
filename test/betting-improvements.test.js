@@ -15,11 +15,11 @@ test('duration stops at the winning goal; undo resumes the live clock', () => {
   assert.equal(firstGoalAt({ goalLog, matchDuration: 90000, timestamp: 190000 }), 110000);
 });
 
-test('credit adds ten now and deducts thirteen from the next active allowance', () => {
+test('credit repays gradually without consuming small allowances or permitting a second loan', () => {
   const now = new Date(2026, 9, 13, 12).getTime();
   const next = new Date(2026, 9, 14, 12).getTime();
   const loss = { kind: 'house', bettor: 'S', stake: 20, odds: 2, matchupKey: 'A::B|C::D',
-    placedAt: now - 1000, outcome: { test: 'winner', team: ['C', 'D'] } };
+    placedAt: now - 1000, allowancePolicy: 2, outcome: { test: 'winner', team: ['C', 'D'] } };
   const match = { teamA: ['A', 'B'], teamB: ['C', 'D'], winner: 'A', goalsA: 5, goalsB: 0,
     timestamp: now + 1000, matchStartedAtMs: now, matchDuration: 500,
     goalLog: [{ team: 'red', timestamp: 500 }] };
@@ -29,11 +29,30 @@ test('credit adds ten now and deducts thirteen from the next active allowance', 
   assert.equal(spendable('S', bets, [match], now + 3000), 10);
   assert.equal(computeBalances(bets, [match], now + 3000).get('S').debt, 13);
   assert.equal(canBorrow('S', bets, [match], now + 3000), false);
-  assert.equal(spendable('S', bets, [match], next), 17);
-  const nextBet = { ...loss, placedAt: next, stake: 7 };
-  assert.equal(spendable('S', [...bets, nextBet], [match], next), 10);
-  assert.equal(computeBalances([...bets, nextBet], [match], next).get('S').debt || 0, 0);
-  assert.equal(spendable('S', [...bets, { ...nextBet, void: true }], [match], next), 17);
+  assert.equal(spendable('S', bets, [match], next), 20); // 10 held + 20 allowance - 10 repayment
+  const nextBet = { ...loss, placedAt: next, stake: 4 };
+  assert.equal(spendable('S', [...bets, nextBet], [match], next), 16);
+  assert.equal(computeBalances([...bets, nextBet], [match], next).get('S').debt, 3);
+  assert.equal(spendable('S', [...bets, { ...nextBet, void: true }], [match], next), 20);
+  const nextMatch = { ...match, timestamp: next + 2000, matchStartedAtMs: next + 1000 };
+  const later = (n) => new Date(2026, 9, n, 12).getTime();
+  const settled = [match, nextMatch];
+  const history = [...bets, nextBet];
+  assert.equal(spendable('S', history, settled, later(16)), 18); // idle day skipped; 4 allowance - 2 repayment
+  assert.equal(canBorrow('S', [...history, { ...loss, placedAt: later(16), stake: 18 }], settled, later(16)), false); // empty wallet on a later day, debt still owed
+  const tinyBet = { ...loss, placedAt: later(16), stake: 1 };
+  const tinyMatch = { ...match, timestamp: later(16) + 2000, matchStartedAtMs: later(16) + 1000 };
+  const tinyHistory = [...history, tinyBet];
+  const allMatches = [...settled, tinyMatch];
+  assert.equal(computeBalances(tinyHistory, allMatches, later(16) + 3000).get('S').debt, 1);
+  assert.equal(spendable('S', tinyHistory, allMatches, later(17)), 18); // allowance 1: repayment zero
+  const finalBet = { ...loss, placedAt: later(17), stake: 4 };
+  const finalMatch = { ...match, timestamp: later(17) + 2000, matchStartedAtMs: later(17) + 1000 };
+  const repaid = [...tinyHistory, finalBet, { ...loss, placedAt: later(18), stake: 1 }];
+  assert.equal(computeBalances(repaid, [...allMatches, finalMatch], later(18)).get('S').debt || 0, 0);
+  assert.equal(computeBalances(tinyHistory, settled, later(17)).get('S').debt, 3); // refunded day makes no repayment
+  const loanOnly = [{ ...loan, placedAt: now }];
+  assert.equal(spendable('S', loanOnly, [], now + 3000), 30); // no same-day repayment or extra grant
   assert.equal(creditId('S', now), creditId('S', now + 1000));
   assert.equal(canBorrow('New', [], [], now), false);
 });

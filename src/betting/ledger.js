@@ -14,7 +14,6 @@ export function dayKey(ms) {
 export function firstGoalAt(match) {
   if (!Array.isArray(match.goalLog) || match.goalLog.length === 0) return null;
   if (Number.isFinite(match.matchStartedAtMs)) return match.matchStartedAtMs + match.goalLog[0].timestamp;
-  // Legacy matches stored the elapsed time at submission.
   if (typeof match.matchDuration !== 'number' || typeof match.timestamp !== 'number') return null;
   return match.timestamp - match.matchDuration + match.goalLog[0].timestamp;
 }
@@ -91,10 +90,15 @@ export function resolveChallenge(bet, matches, now) {
     : { status: 'lost', matchId: match.id, challengerPayout: 0, acceptorPayout: pot };
 }
 
-function book(wallets, days, player, ms, stake, payout, isOpen, today) {
+function book(wallets, days, player, ms, stake, payout, isOpen, today, status, policy) {
   const w = wallets.get(player) || { balance: 0, todayDelta: 0, open: 0 };
-  if (!days.has(player)) days.set(player, new Set());
-  days.get(player).add(dayKey(ms));
+  if (!days.has(player)) days.set(player, new Map());
+  const day = dayKey(ms);
+  const activity = days.get(player).get(day) || { stake: 0, legacy: false };
+  // Refunds and cancelled challenges must not manufacture another allowance.
+  if (status !== 'refunded' && status !== 'cancelled') activity.stake += stake;
+  if (policy !== 2) activity.legacy = true;
+  days.get(player).set(day, activity);
   const net = payout - stake;
   w.balance += net;
   if (isOpen) w.open++;
@@ -102,7 +106,7 @@ function book(wallets, days, player, ms, stake, payout, isOpen, today) {
   wallets.set(player, w);
 }
 
-export function computeBalances(bets, matches, now, cfg = BETTING) {
+function computeLedger(bets, matches, now, cfg) {
   const wallets = new Map();
   const days = new Map();
   const today = dayKey(now);
@@ -110,42 +114,76 @@ export function computeBalances(bets, matches, now, cfg = BETTING) {
   for (const bet of bets) {
     if (bet.void) continue;
     if (bet.kind === 'credit') {
-      book(wallets, days, bet.bettor, bet.placedAt, 0, bet.advance, false, today);
+      // An advance is money, not a stake or a fresh allowance.
+      book(wallets, days, bet.bettor, bet.placedAt, 0, bet.advance, false, today, 'credit', 2);
+      const activity = days.get(bet.bettor).get(dayKey(bet.placedAt));
+      activity.borrowed = (activity.borrowed || 0) + bet.repayment;
     } else if (bet.kind === 'house') {
       const r = resolveHouseBet(bet, index, now);
-      book(wallets, days, bet.bettor, bet.placedAt, bet.stake, r.payout, r.status === 'open', today);
+      book(wallets, days, bet.bettor, bet.placedAt, bet.stake, r.payout, r.status === 'open', today, r.status, bet.allowancePolicy);
     } else if (bet.kind === 'challenge') {
       const r = resolveChallenge(bet, index, now);
       const isOpen = r.status === 'open' || r.status === 'pending';
-      book(wallets, days, bet.challenger, bet.placedAt, bet.challengerStake, r.challengerPayout, isOpen, today);
+      book(wallets, days, bet.challenger, bet.placedAt, bet.challengerStake, r.challengerPayout, isOpen, today, r.status, bet.allowancePolicy);
       if (bet.acceptedBy && typeof bet.acceptedAt === 'number') {
-        book(wallets, days, bet.acceptedBy, bet.acceptedAt, bet.opponentStake, r.acceptorPayout, isOpen, today);
+        book(wallets, days, bet.acceptedBy, bet.acceptedAt, bet.opponentStake, r.acceptorPayout, isOpen, today, r.status, bet.allowancePolicy);
       }
     }
   }
-  for (const [player, w] of wallets) w.balance += cfg.dailyAllowance * days.get(player).size;
-  for (const loan of bets.filter(b => b.kind === 'credit' && !b.void)) {
-    const w = wallets.get(loan.bettor);
-    const repaymentDay = [...days.get(loan.bettor)].filter(d => d > dayKey(loan.placedAt)).sort((a, b) => a - b)[0];
-    if (repaymentDay !== undefined) {
-      w.balance -= loan.repayment;
-      if (repaymentDay === today) w.todayDelta -= loan.repayment;
-    } else {
-      w.debt = (w.debt || 0) + loan.repayment;
-      w.borrowedDay = dayKey(loan.placedAt);
+  const allowances = new Map();
+  for (const [player, activity] of days) {
+    let previousStake = null;
+    let debt = 0;
+    let todayRepayment = 0;
+    let creditedToday = false;
+    let todayAmount = cfg.dailyAllowance;
+    for (const [day, entry] of [...activity].sort(([a], [b]) => a - b)) {
+      const amount = entry.legacy ? cfg.dailyAllowance
+        : Math.min(cfg.dailyAllowance, previousStake ?? cfg.dailyAllowance);
+      const active = entry.legacy || entry.stake > 0;
+      const repayment = Math.min(debt, Math.floor(amount / 2));
+      if (active) {
+        wallets.get(player).balance += amount - repayment;
+        debt -= repayment;
+        if (day === today) wallets.get(player).todayDelta -= repayment;
+      }
+      // Loans taken today start repayment on a later active day.
+      debt += entry.borrowed || 0;
+      if (day === today) {
+        creditedToday = active;
+        todayAmount = amount;
+        todayRepayment = repayment;
+      }
+      // Skip empty/refunded days when finding the previous active day.
+      if (day < today && entry.stake > 0) previousStake = entry.stake;
     }
+    if (!creditedToday) todayAmount = Math.min(cfg.dailyAllowance, previousStake ?? cfg.dailyAllowance);
+    if (!creditedToday) todayRepayment = Math.min(debt - (activity.get(today)?.borrowed || 0), Math.floor(todayAmount / 2));
+    if (debt) wallets.get(player).debt = debt;
+    allowances.set(player, { amount: todayAmount, credited: creditedToday, repayment: todayRepayment });
   }
-  return wallets;
+  return { wallets, allowances };
+}
+
+export function computeBalances(bets, matches, now, cfg = BETTING) {
+  return computeLedger(bets, matches, now, cfg).wallets;
+}
+
+/** The same calculation drives the displayed balance and every stake check. */
+export function walletAvailable(player, bets, matches, now, cfg = BETTING) {
+  const { wallets, allowances } = computeLedger(bets, matches, now, cfg);
+  const allowance = allowances.get(player) || { amount: cfg.dailyAllowance, credited: false, repayment: 0 };
+  return {
+    balance: (wallets.get(player)?.balance ?? 0) + (allowance.credited ? 0 : allowance.amount - allowance.repayment),
+    allowance: allowance.amount,
+    allowanceCredited: allowance.credited,
+    repayment: allowance.repayment,
+    debt: wallets.get(player)?.debt || 0,
+  };
 }
 
 export function spendable(bettor, bets, matches, now, cfg = BETTING) {
-  const w = computeBalances(bets, matches, now, cfg).get(bettor);
-  const today = dayKey(now);
-  const activeToday = bets.some(b => !b.void && (
-    ((b.bettor === bettor || b.challenger === bettor) && dayKey(b.placedAt) === today)
-    || (b.acceptedBy === bettor && dayKey(b.acceptedAt) === today)));
-  const repayment = w?.debt && w.borrowedDay < today ? w.debt : 0;
-  return (w?.balance || 0) + (activeToday ? 0 : cfg.dailyAllowance - repayment);
+  return walletAvailable(bettor, bets, matches, now, cfg).balance;
 }
 
 // A deterministic document ID also makes simultaneous requests on two phones idempotent.

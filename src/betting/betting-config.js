@@ -9,7 +9,7 @@ export const BETTING = {
   challenges: false,                                                      // phase 3
   margin: 0.05,
   oddsClamp: [1.05, 10],
-  dailyAllowance: 20,
+  dailyAllowance: 20, // initial amount and cap; later allowances match prior active-day stakes
   credit: { advance: 10, repayment: 13 }, // one advance per UTC day, only with an empty wallet
   undoWindowMs: 5000,
   maxStake: 10000,        // also enforced in firestore.rules (isStake)

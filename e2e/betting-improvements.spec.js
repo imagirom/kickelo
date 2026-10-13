@@ -39,7 +39,7 @@ test('AND ticket, ALL IN and empty-wallet credit work together', async ({ page }
   await page.getByRole('button', { name: /Red wins/ }).click();
   await expect(page.locator('.bet-all-in')).toBeDisabled();
   await page.locator('.bet-credit-borrow').click();
-  await expect(page.locator('.bet-credit')).toContainText('13 will be deducted');
+  await expect(page.locator('.bet-credit')).toContainText('13 golden footballs still owed');
   await expect(page.locator('.bet-credit-borrow')).toBeHidden();
   await page.locator('.bet-all-in').click();
   await expect(page.locator('.bet-sheet-stake')).toHaveValue('10');
@@ -49,7 +49,7 @@ test('AND ticket, ALL IN and empty-wallet credit work together', async ({ page }
   await page.getByRole('button', { name: /Red wins/ }).click();
   await expect(page.locator('.bet-all-in')).toBeDisabled();
   await expect(page.locator('.bet-credit-borrow')).toBeHidden();
-  await expect(page.locator('.bet-credit')).toContainText('13 will be deducted');
+  await expect(page.locator('.bet-credit')).toContainText('13 golden footballs still owed');
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 });
 

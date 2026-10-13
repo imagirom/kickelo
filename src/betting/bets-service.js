@@ -3,7 +3,7 @@
 import { db, collection, doc, addDoc, updateDoc, onSnapshot, serverTimestamp, runTransaction, getDoc } from '../firebase-service.js';
 import { allMatches } from '../match-data-service.js';
 import { BETTING } from './betting-config.js';
-import { computeBalances, checkBet, resolveHouseBet, resolveChallenge, dayKey, acceptDecision, deniedChallengeReason, spendable, creditId, canBorrow } from './ledger.js';
+import { computeBalances, checkBet, resolveHouseBet, resolveChallenge, walletAvailable, acceptDecision, deniedChallengeReason, spendable, creditId, canBorrow } from './ledger.js';
 import { getCurrentMatch } from './current-match-service.js';
 import { sameOutcome } from './outcomes.js';
 import { teamKey } from '../teams/team-identity.js';
@@ -50,6 +50,10 @@ export function available(bettor) {
   return spendable(bettor, allBets, allMatches || [], Date.now());
 }
 
+export function allowanceStatus(bettor) {
+  return walletAvailable(bettor, allBets, allMatches || [], Date.now());
+}
+
 export function creditStatus(bettor) {
   return { canBorrow: canBorrow(bettor, allBets, allMatches || [], Date.now()),
     debt: getBalances().get(bettor)?.debt || 0 };
@@ -89,7 +93,7 @@ export async function placeHouseBet({ bettor, stake, outcome, expectedOdds, matc
   }
   if (expectedOdds !== undefined && odds !== expectedOdds) throw new Error('changed');
   const bet = {
-    kind: 'house', matchupKey: cm.matchupKey, bettor, stake, odds,
+    kind: 'house', allowancePolicy: 2, matchupKey: cm.matchupKey, bettor, stake, odds,
     outcome: combined ? combined.outcome : {
       test: rest.test, team: rest.team ? [...rest.team].sort() : null,
       threshold: rest.threshold ?? null, negate: Boolean(rest.negate),
@@ -130,7 +134,7 @@ export async function placeChallenge({ challenger, opponent, outcome, challenger
   if (!cm?.matchupKey) throw new Error('closed');
   if (matchupKey !== undefined && cm.matchupKey !== matchupKey) throw new Error('changed');
   const bet = {
-    kind: 'challenge', matchupKey: cm.matchupKey, challenger, opponent: opponent || null, challengerStake, opponentStake,
+    kind: 'challenge', allowancePolicy: 2, matchupKey: cm.matchupKey, challenger, opponent: opponent || null, challengerStake, opponentStake,
     outcome: {
       test: outcome.test, team: outcome.team ? [...outcome.team].sort() : null,
       threshold: outcome.threshold ?? null, negate: Boolean(outcome.negate),

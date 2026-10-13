@@ -175,7 +175,7 @@ These were created by and used mainly for use with AI tools.
 
 - Live match duration ends at the final goal. The clock stops when a team reaches five and resumes if that goal is removed. New matches retain their start time separately so delayed submission does not change the betting cutoff; older matches remain supported.
 - **ALL IN** fills the stake with the selected bettor's available balance, including an unclaimed daily allowance, up to the existing 10,000-ball stake limit.
-- Selecting a bettor with an empty wallet shows a highlighted **No golden footballs left** panel above the stake controls. **Borrow 10 from your next allowance** advances ten balls. Thirteen are deducted from the next daily allowance earned by betting on a later day, leaving seven of the usual twenty. Only one loan may be outstanding, with at most one advance per UTC day. Loans cannot be undone; undoing a bet does not cancel its loan. Like existing stakes, affordability is checked by the shared-account client; rules enforce the fixed loan terms, immutable entries and daily duplicate protection.
+- Selecting a bettor with an empty wallet shows a highlighted **No golden footballs left** panel above the stake controls. **Borrow 10 from future allowances** advances ten balls. Repay thirteen in total from future active-day allowances: each repayment is the smaller of the outstanding debt and half the allowance, rounded down. A four-ball allowance repays two and leaves two; a one-ball allowance repays zero and remains usable. The unpaid balance carries forward without extra fees, and idle or fully refunded days make no repayments. Only one loan may be outstanding, with at most one advance per UTC day. Loans cannot be undone; undoing a bet does not cancel its loan. Like existing stakes, affordability is checked by the shared-account client; rules enforce the fixed loan terms, immutable entries and daily duplicate protection.
 - The normal board shows the two winner buttons and two Yes/No prop rows (four additional choices).
 - **Advanced betting** is collapsed by default. **Combine two bets (AND)** joins two predictions on the current match. Both must win. Scoring combinations use the existing goal-sequence model, accounting for correlation. Combinations involving duration use the fitted duration probability and assume duration and scoring are independent conditional on the Elo gap. This is a pricing approximation; the normal house margin is applied once and the odds cap is retained. The selector excludes impossible and redundant combinations. The picker uses the winner selections and the props currently offered on the normal board; both Yes and No sides of duration bets can be combined too. Missing result data refunds the entire ticket. Betting closes at the first goal.
 
@@ -191,3 +191,24 @@ npm run dev
 ```
 
 Development mode automatically connects to the local Firestore and Auth emulators. Tests create an emulator-only login with password `test-password-e2e` (`node -e "import('./e2e/helpers.js').then(m => m.ensureTestUser())"`). Run `npm test` for logic tests and `npm run test:e2e -- --workers=1` for browser/rules checks; one worker is required because they share emulator data.
+
+
+
+## Golden-football allowances
+
+New bettors start with 20 golden footballs. On each later active day, the allowance
+matches the total staked on the previous active day, capped at 20. Staking 4 balls
+means an allowance of 4 next time; idle days add nothing. Winnings remain in the
+wallet. Multiple bets are added together, including both winning and losing bets.
+Voided, refunded and cancelled bets do not earn allowances; days containing only
+those bets are skipped. Open stakes count provisionally until the result is known.
+
+New bets store `allowancePolicy: 2`. Existing bets retain their original 20-ball
+allowances, including on a day with both old and new bets, so historical credits
+are preserved without rewriting data. The first new day uses the last active day's
+eligible stakes, including legacy stakes. Deploy the updated client and Firestore
+rules together: new writes must include the policy, and it cannot be changed later.
+Old clients must reload before placing another bet. Like the existing wallet,
+allowances are derived from bets and matches; editing or deleting a match can change
+the eligibility of its stakes. Matching stakes limits the small-stake allowance
+loophole; it does not prevent hedging opposite outcomes.
