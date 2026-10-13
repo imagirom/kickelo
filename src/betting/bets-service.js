@@ -3,7 +3,7 @@
 import { db, collection, doc, addDoc, updateDoc, onSnapshot, serverTimestamp, runTransaction, getDoc } from '../firebase-service.js';
 import { allMatches } from '../match-data-service.js';
 import { BETTING } from './betting-config.js';
-import { computeBalances, checkBet, resolveHouseBet, resolveChallenge, dayKey, acceptDecision, deniedChallengeReason } from './ledger.js';
+import { computeBalances, checkBet, resolveHouseBet, resolveChallenge, dayKey, acceptDecision, deniedChallengeReason, spendable, creditId, canBorrow } from './ledger.js';
 import { getCurrentMatch } from './current-match-service.js';
 import { teamKey } from '../teams/team-identity.js';
 
@@ -46,12 +46,24 @@ export function getOpenBetsFor(key) {
 
 /** Spendable now: wallet balance, plus today's allowance if no bet placed today. */
 export function available(bettor) {
-  const w = getBalances().get(bettor);
-  const today = dayKey(Date.now());
-  const hasBetToday = allBets.some((b) => !b.void && (
-    ((b.bettor === bettor || b.challenger === bettor) && dayKey(b.placedAt) === today)
-    || (b.acceptedBy === bettor && typeof b.acceptedAt === 'number' && dayKey(b.acceptedAt) === today)));
-  return (w?.balance ?? 0) + (hasBetToday ? 0 : BETTING.dailyAllowance);
+  return spendable(bettor, allBets, allMatches || [], Date.now());
+}
+
+export function creditStatus(bettor) {
+  return { canBorrow: canBorrow(bettor, allBets, allMatches || [], Date.now()),
+    debt: getBalances().get(bettor)?.debt || 0 };
+}
+
+export async function borrowFootballs(bettor) {
+  const now = Date.now();
+  const ref = doc(db, 'bets', creditId(bettor, now));
+  await runTransaction(db, async tx => {
+    const existing = await tx.get(ref);
+    if (existing.exists() || !canBorrow(bettor, allBets, allMatches || [], Date.now())) throw new Error('credit-unavailable');
+    tx.set(ref, { kind: 'credit', bettor, advance: BETTING.credit.advance,
+      repayment: BETTING.credit.repayment, creditDay: Math.floor(now / 86400000),
+      placedAt: serverTimestamp(), void: false });
+  });
 }
 
 /** outcome: { test, team, threshold?, negate?, propId? }; propId (prop bets) is only used to look up odds.

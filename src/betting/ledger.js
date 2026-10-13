@@ -109,7 +109,9 @@ export function computeBalances(bets, matches, now, cfg = BETTING) {
   const index = indexByMatchup(matches);
   for (const bet of bets) {
     if (bet.void) continue;
-    if (bet.kind === 'house') {
+    if (bet.kind === 'credit') {
+      book(wallets, days, bet.bettor, bet.placedAt, 0, bet.advance, false, today);
+    } else if (bet.kind === 'house') {
       const r = resolveHouseBet(bet, index, now);
       book(wallets, days, bet.bettor, bet.placedAt, bet.stake, r.payout, r.status === 'open', today);
     } else if (bet.kind === 'challenge') {
@@ -122,7 +124,39 @@ export function computeBalances(bets, matches, now, cfg = BETTING) {
     }
   }
   for (const [player, w] of wallets) w.balance += cfg.dailyAllowance * days.get(player).size;
+  for (const loan of bets.filter(b => b.kind === 'credit' && !b.void)) {
+    const w = wallets.get(loan.bettor);
+    const repaymentDay = [...days.get(loan.bettor)].filter(d => d > dayKey(loan.placedAt)).sort((a, b) => a - b)[0];
+    if (repaymentDay !== undefined) {
+      w.balance -= loan.repayment;
+      if (repaymentDay === today) w.todayDelta -= loan.repayment;
+    } else {
+      w.debt = (w.debt || 0) + loan.repayment;
+      w.borrowedDay = dayKey(loan.placedAt);
+    }
+  }
   return wallets;
+}
+
+export function spendable(bettor, bets, matches, now, cfg = BETTING) {
+  const w = computeBalances(bets, matches, now, cfg).get(bettor);
+  const today = dayKey(now);
+  const activeToday = bets.some(b => !b.void && (
+    ((b.bettor === bettor || b.challenger === bettor) && dayKey(b.placedAt) === today)
+    || (b.acceptedBy === bettor && dayKey(b.acceptedAt) === today)));
+  const repayment = w?.debt && w.borrowedDay < today ? w.debt : 0;
+  return (w?.balance || 0) + (activeToday ? 0 : cfg.dailyAllowance - repayment);
+}
+
+// A deterministic document ID also makes simultaneous requests on two phones idempotent.
+export function creditId(bettor, now) {
+  return `credit:${bettor}:${Math.floor(now / 86400000)}`;
+}
+
+export function canBorrow(bettor, bets, matches, now) {
+  const w = computeBalances(bets, matches, now).get(bettor);
+  return Boolean(bettor) && spendable(bettor, bets, matches, now) === 0 && !w?.debt
+    && !bets.some(b => b.kind === 'credit' && b.bettor === bettor && Math.floor(b.placedAt / 86400000) === Math.floor(now / 86400000));
 }
 
 /** Open stake on a matchup (for the overwrite dialog): open house bets and open/pending challenges. */

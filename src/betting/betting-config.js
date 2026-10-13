@@ -9,6 +9,7 @@ export const BETTING = {
   margin: 0.05,
   oddsClamp: [1.05, 10],
   dailyAllowance: 20,
+  credit: { advance: 10, repayment: 13 }, // one advance per UTC day, only with an empty wallet
   undoWindowMs: 5000,
   maxStake: 10000,        // also enforced in firestore.rules (isStake)
   stakeChips: [5, 10, 25],

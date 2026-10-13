@@ -76,3 +76,14 @@ test('meta/currentMatch: no delete, closed betting is not reopened in place', as
   expect(await allowed(updateDoc(ref, { firstGoalAt: null, offer: null, goalLog: [] }))).toBe(true); // match ended
   expect(await allowed(updateDoc(ref, { matchupKey: 'A::C|B::D', firstGoalAt: null, offer: OFFER }))).toBe(true);
 });
+
+test('credit is a fixed, immutable advance with at most one entry per player and UTC day', async () => {
+  const creditDay = Math.floor(Date.now() / 86400000);
+  const loan = { kind: 'credit', bettor: 'S', advance: 10, repayment: 13, creditDay, placedAt: serverTimestamp(), void: false };
+  const ref = doc(db, 'bets', `credit:S:${creditDay}`);
+  expect(await allowed(setDoc(ref, { ...loan, repayment: 10 }))).toBe(false);
+  expect(await allowed(setDoc(doc(db, 'bets', 'another-credit'), loan))).toBe(false);
+  expect(await allowed(setDoc(ref, loan))).toBe(true);
+  expect(await allowed(setDoc(ref, loan))).toBe(false);
+  expect(await allowed(updateDoc(ref, { void: true }))).toBe(false);
+});

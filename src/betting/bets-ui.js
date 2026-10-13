@@ -13,7 +13,7 @@ import { BETTING, houseBetsActive } from './betting-config.js';
 import { describeOutcome, OUTCOME_TESTS, mmss } from './outcomes.js';
 import { isLockedIn, resolveHouseBet, resolveChallenge, dayKey } from './ledger.js';
 import { getCurrentMatch } from './current-match-service.js';
-import { getBets, placeHouseBet, undoBet, available, placeChallenge, acceptChallenge, withdrawChallenge } from './bets-service.js';
+import { getBets, placeHouseBet, undoBet, available, placeChallenge, acceptChallenge, withdrawChallenge, creditStatus, borrowFootballs } from './bets-service.js';
 import { footballs, GF_ICON_SRC } from './currency.js';
 import { isLiveOnThisDevice } from './sync-controller.js';
 
@@ -480,6 +480,22 @@ async function openBetSheet({ outcome, odds, title, matchupKey: key }) {
   });
   chips.append(allIn, stakeInput);
 
+  const credit = el('div', 'bet-credit');
+  const borrow = el('button', 'bet-credit-borrow', `Borrow ${BETTING.credit.advance} · repay ${BETTING.credit.repayment}`);
+  borrow.type = 'button';
+  const creditNote = el('div', 'bets-caption');
+  credit.append(borrow, creditNote);
+  let borrowing = false;
+  borrow.addEventListener('click', async () => {
+    borrowing = true;
+    update();
+    try {
+      await borrowFootballs(bettorSelect.value);
+      showToast(`${BETTING.credit.advance} golden footballs borrowed`, 'success');
+    } catch (err) {
+      showToast('Credit unavailable: wallet changed, debt outstanding, or already borrowed today', 'warning');
+    } finally { borrowing = false; update(); }
+  });
   const info = el('div', 'bet-sheet-info');
   function update() {
     const stake = Number(stakeInput.value) || 0;
@@ -488,6 +504,13 @@ async function openBetSheet({ outcome, odds, title, matchupKey: key }) {
       btn.setAttribute('aria-pressed', String(chip === stake));
     }
     const balance = bettorSelect.value ? available(bettorSelect.value) : 0;
+    const creditState = creditStatus(bettorSelect.value);
+    credit.hidden = !bettorSelect.value || (balance > 0 && !creditState.debt);
+    borrow.hidden = !creditState.canBorrow && !borrowing;
+    borrow.disabled = borrowing;
+    creditNote.textContent = creditState.debt
+      ? `${creditState.debt} will be deducted from your next ${BETTING.dailyAllowance}-ball allowance.`
+      : `Receive ${BETTING.credit.advance} now; your next allowance is ${BETTING.dailyAllowance - BETTING.credit.repayment} instead of ${BETTING.dailyAllowance}. One outstanding loan, at most once per UTC day.`;
     allIn.disabled = !bettorSelect.value || balance < 1;
     allIn.title = balance > BETTING.maxStake ? `Maximum stake: ${BETTING.maxStake}` : 'Stake all available golden footballs';
     amounts(info, [['Payout:', Math.round(stake * odds)], ['Balance:', balance]]);
@@ -497,7 +520,7 @@ async function openBetSheet({ outcome, odds, title, matchupKey: key }) {
   bettorSelect.addEventListener('change', update);
   update();
 
-  sheet.append(field('Bettor', bettorSelect), chips, info);
+  sheet.append(field('Bettor', bettorSelect), chips, info, credit);
   const pending = showConfirm('', { contentElement: sheet, confirmLabel: 'Place bet', cancelLabel: 'Cancel' });
   update(); // the dialog exists now: guard its confirm button
   window.addEventListener('bets-updated', update);

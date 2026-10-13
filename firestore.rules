@@ -183,6 +183,18 @@ service cloud.firestore {
       // whole golden footballs; the bound keeps Infinity/1e12 out of everyone's balances
       function isStake(v) { return v is int && v > 0 && v <= 10000; }
 
+      // Credit is an immutable ledger entry; its daily ID prevents concurrent duplicate advances.
+      // As with stakes, wallet affordability is derived and checked by the shared-account client.
+      allow create: if canAccess()
+            && request.resource.data.kind == 'credit'
+            && request.resource.data.keys().hasOnly(['kind', 'bettor', 'advance', 'repayment', 'creditDay', 'placedAt', 'void'])
+            && isName(request.resource.data.bettor)
+            && request.resource.data.advance == 10 && request.resource.data.repayment == 13
+            && request.resource.data.void == false
+            && request.resource.data.placedAt == request.time
+            && request.resource.data.creditDay == int(request.time.toMillis() / 86400000)
+            && betId == 'credit:' + request.resource.data.bettor + ':' + string(request.resource.data.creditDay);
+
       // House bets only while the current match has not had its first goal;
       // challenges any time while their matchup is the shared one.
       allow create: if canAccess()
