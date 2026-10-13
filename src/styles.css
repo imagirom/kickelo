@@ -2457,6 +2457,10 @@ body.paused > *:not(#pauseOverlay) {
 .bets-feed-result { margin-left: auto; color: var(--text-color-secondary); }
 .bets-feed-result.won { color: #f2c230; }
 .bet-sheet { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+.bet-credit { padding: 12px; border: 1px solid #b99a3e; border-radius: 6px; background: rgba(242, 194, 48, 0.08); }
+.bet-credit-title { font-weight: 600; color: #f2c230; }
+.bet-credit .bets-caption { text-align: left; margin: 6px 0 10px; }
+.bet-credit-borrow { border: 1px solid #b99a3e; }
 .bet-credit[hidden], .bet-credit-borrow[hidden] { display: none; }
 .bets-combine-btn, .bet-credit-borrow { min-height: 44px; }
 .bet-sheet-title { font-weight: 600; }
