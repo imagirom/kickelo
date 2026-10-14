@@ -1,6 +1,6 @@
 // src/betting/current-match-service.js
 // Real-time shared live state in meta/currentMatch. Same pattern as team-service.js.
-import { db, doc, onSnapshot, runTransaction, serverTimestamp } from '../firebase-service.js';
+import { db, doc, onSnapshot, runTransaction, serverTimestamp, getDocFromServer } from '../firebase-service.js';
 import { getCachedStats } from '../stats-cache-service.js';
 import { STARTING_ELO } from '../constants.js';
 import { BETTING } from './betting-config.js';
@@ -19,6 +19,17 @@ export function getCurrentMatch() {
 function eloOf(name) {
   const traj = getCachedStats(name)?.eloTrajectory;
   return traj?.length ? traj[traj.length - 1].elo : STARTING_ELO;
+}
+
+/** The shared doc as the server has it now (the first snapshot after a reload may come from the
+ *  local cache); the cached copy when offline. */
+export async function fetchCurrentMatch() {
+  try {
+    const snap = await getDocFromServer(ref());
+    return snap.exists() ? snap.data() : null;
+  } catch {
+    return current;
+  }
 }
 
 export function initializeCurrentMatch() {

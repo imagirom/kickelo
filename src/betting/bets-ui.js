@@ -346,7 +346,11 @@ async function openChallengeForm(cm) {
     if (d.thresholds) {
       const [text, fmt] = THRESHOLD[d.id] || ['By', String];
       thresholdRow.firstChild.textContent = text;
-      fillSelect(thresholdSelect, d.thresholds.map((k) => [String(k), fmt(k)]), thresholdSelect.value);
+      // refilled only when the bet type changes, so a background refresh never closes an open picker
+      if (thresholdSelect.dataset.test !== d.id) {
+        fillSelect(thresholdSelect, d.thresholds.map((k) => [String(k), fmt(k)]), thresholdSelect.value);
+        thresholdSelect.dataset.test = d.id;
+      }
     }
     for (const [btn, value] of sideButtons) {
       btn.classList.toggle('active', value === negate);

@@ -8,7 +8,7 @@ import { showConfirm, showToast } from '../toast.js';
 import { BETTING } from './betting-config.js';
 import { matchupKey, isFullLineup } from './matchup.js';
 import { shouldClearAfterSubmit, shouldPublishLineup, needsOverwriteConfirm, isLiveTakeover, ownsLive, showNotSharedHint, liveStartQuestion, resumeOverridden } from './current-match.js';
-import { getCurrentMatch, publishLineup, publishPositions, publishLiveStart, publishGoal, publishLiveEnd } from './current-match-service.js';
+import { getCurrentMatch, fetchCurrentMatch, publishLineup, publishPositions, publishLiveStart, publishGoal, publishLiveEnd } from './current-match-service.js';
 import { getBets } from './bets-service.js';
 import { openStakeFor } from './ledger.js';
 import { allMatches } from '../match-data-service.js';
@@ -34,13 +34,18 @@ let rerun = false;
 let lastWarnAt = 0;
 let snapshotSeen = false;
 let pendingResume = false; // live match restored after a reload, waiting for the shared doc
+let resuming = false;
 const CLAIM_KEY = 'kickelo.liveClaim'; // this phone's live claim, so a reload keeps ownership
 
+// Kept for the day only, like the saved live match it belongs to.
 function storeClaim(claim) {
-  try { localStorage.setItem(CLAIM_KEY, JSON.stringify(claim)); } catch { /* best-effort */ }
+  try { localStorage.setItem(CLAIM_KEY, JSON.stringify(claim && { ...claim, day: new Date().toDateString() })); } catch { /* best-effort */ }
 }
 function storedClaim() {
-  try { return JSON.parse(localStorage.getItem(CLAIM_KEY)) || {}; } catch { return {}; }
+  try {
+    const claim = JSON.parse(localStorage.getItem(CLAIM_KEY));
+    return claim?.day === new Date().toDateString() ? claim : {};
+  } catch { return {}; }
 }
 
 export function isLiveOnThisDevice() {
@@ -202,6 +207,7 @@ function pushGoals() {
  *  Taking over another phone's live match is always asked first, also when this phone's snapshot
  *  had not shown it yet: the claim transaction then reports the fresh doc and the question follows. */
 async function syncOnce() {
+  if (pendingResume) return; // resume() decides first, then schedules a pass itself
   const { key } = readLineup();
   const live = liveLocal; // a live-start mid-pass re-runs the pass, so it always gets the takeover question
   let cur = getCurrentMatch();
@@ -255,10 +261,15 @@ function scheduleSync() {
 
 /** A live match restored after a reload: keep this phone's claim if the shared doc still carries it
  *  (and catch up on goals), drop the match if the shared match moved on, else claim it now. */
-function resume() {
+async function resume() {
+  if (resuming) return;
+  resuming = true;
+  const cur = await fetchCurrentMatch(); // not the cached first snapshot: the match may have moved on meanwhile
+  resuming = false;
+  if (!pendingResume) return; // live mode ended meanwhile
   pendingResume = false;
   const claim = storedClaim();
-  if (resumeOverridden(getCurrentMatch(), claim.liveId)) {
+  if (resumeOverridden(cur, claim.liveId)) {
     liveId = null;
     dropLiveMode();
     showToast('This live match was replaced on another phone.', 'info');
@@ -267,7 +278,7 @@ function resume() {
   if (claim.liveId) {
     liveId = claim.liveId;
     liveKey = claim.key;
-    pushGoals();
+    if (JSON.stringify(cur?.goalLog || []) !== JSON.stringify(localGoals)) pushGoals(); // goals scored before the tab was dropped
   }
   scheduleSync();
 }
@@ -306,6 +317,7 @@ export function initSyncController() {
     liveLocal = true;
     localGoals = [];
     liveStarting = true;
+    storeClaim(null);
     scheduleSync();
   });
 
@@ -326,7 +338,7 @@ export function initSyncController() {
   });
 
   window.addEventListener('live-ended', () => {
-    const mine = liveId;
+    const mine = liveId ?? (pendingResume ? storedClaim().liveId ?? null : null); // ended before the resume decided
     liveEpoch++;
     liveId = null;
     liveKey = null;

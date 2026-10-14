@@ -686,12 +686,16 @@ function showLiveUI(enabled) {
 }
 
 // --- Surviving reloads: mobile browsers may drop the tab while another app (e.g. Spotify) is open ---
-const saveLive = () => save({ live: { startedAt: matchStartTime, goalLog } });
+// Tournament games are not restored: their tournament context lives in memory only, and a restored
+// plain match would be logged without the tournament result.
+const savedLineup = () => (tournamentTeamMapping ? null : [teamA1Select, teamA2Select, teamB1Select, teamB2Select].map(getFilledRoleValue));
+const saveLive = () => save(tournamentTeamMapping ? { lineup: null, live: null }
+    : { lineup: savedLineup(), live: { startedAt: matchStartTime, goalLog } });
 window.addEventListener('live-goal', () => { if (liveMode) saveLive(); });
 
 let restoreDone = false; // the lineup is only saved once the saved one was restored, so the page load can't wipe it
 window.addEventListener('lineup-changed', () => {
-    if (restoreDone) save({ lineup: [teamA1Select, teamA2Select, teamB1Select, teamB2Select].map((s) => s.value) });
+    if (restoreDone) save({ lineup: savedLineup() });
 });
 
 /** Silently restores today's lineup and live match (clock keeps running from the original start). */
@@ -700,7 +704,9 @@ function restoreSaved() {
     const saved = loadSaved();
     const selects = [teamA1Select, teamA2Select, teamB1Select, teamB2Select];
     if (saved?.lineup && selects.every((s) => !s.value)) {
-        selects.forEach((s, i) => { s.value = saved.lineup[i] || ''; });
+        // only players that still exist (never the "Add new player…" entry)
+        const isPlayer = (s, name) => name && name !== '__add_new__' && [...s.options].some((o) => o.value === name);
+        selects.forEach((s, i) => { s.value = isPlayer(s, saved.lineup[i]) ? saved.lineup[i] : ''; });
         notifyRolesChanged();
     }
     restoreDone = true;
@@ -708,6 +714,8 @@ function restoreSaved() {
         liveMode = true;
         matchStartTime = saved.live.startedAt;
         goalLog = saved.live.goalLog || [];
+        preload([soundRegistry.goalRed.src, soundRegistry.goalBlue.src]);
+        armDevice();
         showLiveUI(true);
         renderGoalTimeline();
         startLiveMatchTimer();
