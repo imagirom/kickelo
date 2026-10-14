@@ -1,7 +1,7 @@
 // Tournament Firestore Service — CRUD, listeners, and state management.
 
 import {
-  db, collection, doc, addDoc, getDoc, getDocs, updateDoc,
+  db, collection, doc, addDoc, getDoc, getDocFromServer, getDocs, updateDoc,
   query, where, orderBy, onSnapshot
 } from '../firebase-service.js';
 import { serverTimestamp, deleteField } from 'firebase/firestore';
@@ -77,9 +77,10 @@ export function getTournamentById(id) {
 /**
  * Get a tournament directly from Firestore (for guaranteed fresh data).
  */
-export async function fetchTournament(id) {
+/** fromServer: skip the local cache (throws when offline). */
+export async function fetchTournament(id, { fromServer = false } = {}) {
   const docRef = doc(db, TOURNAMENTS_COLLECTION, id);
-  const snap = await getDoc(docRef);
+  const snap = await (fromServer ? getDocFromServer : getDoc)(docRef);
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() };
 }

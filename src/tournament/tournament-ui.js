@@ -60,11 +60,12 @@ export function setActiveTournamentGame(game) {
   activeTournamentGame = game;
 }
 
-/** Whether a restored game can still be played, decided on the server's copy (not the cached first snapshot).
- *  A failed fetch (offline) counts as yes: the submit checks again (completeTournamentMatch fetches). */
+/** Whether a restored game can still be played, decided on the server's copy (not the local cache).
+ *  Offline counts as yes (keep the game): if it was logged on another phone meanwhile, submitting it
+ *  here would log the match twice — the tournament result itself is refused, the ranked match is not. */
 export async function canStillPlay(game) {
   let t;
-  try { t = await fetchTournament(game.tournamentId); } catch { return true; }
+  try { t = await fetchTournament(game.tournamentId, { fromServer: true }); } catch { return true; }
   return canResumeGame(t, game);
 }
 
