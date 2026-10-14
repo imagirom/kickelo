@@ -83,6 +83,7 @@ The app is production‑ready, with real‑time Firestore updates, a modular ES�
 - `src/leaderboard-display.js`, `src/recent-matches-display.js`: Core UI views (recent matches includes tournament context tags).
 - `src/player-stats-component.js`: Player modal with charts and tables.
 - `src/match-timeline.js`: SVG timeline rendering for goal logs.
+- `src/elo-overview-chart.js`: "ELO Graph" chart of all visible players (follows season + inactive filter).
 
 ### Tournaments
 - `src/tournament/tournament-engine.js`: Pure-function DAG engine — game completion, winner cascading, rankings, validation.

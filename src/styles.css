@@ -1342,6 +1342,64 @@ body.paused > *:not(#pauseOverlay) {
 
 
 /* =============================
+   ELO Over Time (all players)
+   ============================= */
+/* Mirrors the player page's ELO Trajectory chart card and controls */
+.elo-overview-controls {
+  display: flex;
+  gap: 14px;
+  margin-top: 16px;
+  margin-bottom: 6px;
+  font-size: 0.82em;
+  color: var(--text-color-secondary);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.elo-overview-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.elo-overview-controls input[type="checkbox"] {
+  accent-color: #6cabc2;
+}
+
+.elo-overview-controls select {
+  width: auto;
+  background: var(--background-color-primary);
+  color: var(--text-color-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 1em;
+  cursor: pointer;
+  outline: none;
+}
+
+.elo-overview-controls .spacer {
+  flex: 1;
+}
+
+.elo-overview-container {
+  position: relative;
+  height: 380px;
+  width: 100%;
+  background-color: var(--background-color-primary);
+  border-radius: 5px;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.elo-overview-empty {
+  color: var(--text-color-secondary);
+}
+
+
+/* =============================
    Activity Heatmap
    ============================= */
 .activity-heatmap-container {
