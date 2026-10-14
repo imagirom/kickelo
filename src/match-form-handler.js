@@ -383,6 +383,7 @@ export function setupMatchForm() {
 
             // 2. Add match to Firestore first
             const matchDocRef = await addDoc(matchesColRef, matchData);
+            save({ lineup: null, live: null, tournament: null }); // logged: a reload from here on must not bring it back
             clearLastSuggestion();
             window.dispatchEvent(new CustomEvent('match-submitted', { detail: { teamA, teamB } }));
 
