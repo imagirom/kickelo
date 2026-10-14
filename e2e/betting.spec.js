@@ -514,8 +514,18 @@ test('a reload mid tournament game restores the game; a game logged elsewhere me
     expect(swapped.slice(2)).toEqual(team0);
     await expect.poll(async () => (await shared())?.goalLog?.arrayValue?.values?.length ?? 0, { timeout: 10000 }).toBe(2); // live claim committed
 
+    // A slow connection keeps the server check of the restored game pending: taps meanwhile don't queue submits.
+    await a.route('http://127.0.0.1:7070/**', async (r) => { await new Promise((res) => setTimeout(res, 1500)); await r.continue().catch(() => {}); }); // a request the page dropped meanwhile is gone
     await a.reload();
     await a.waitForFunction(() => document.querySelectorAll('#teamA1 option').length > 6);
+    await expect(a.locator('.tournament-match-banner .banner-game')).toHaveText(gameName);
+    await a.click('#submitMatchBtn');
+    await a.click('#submitMatchBtn');
+    await expect(a.locator('.toast-message', { hasText: 'Checking the tournament game' }).first()).toBeVisible();
+    await a.unrouteAll({ behavior: 'ignoreErrors' }); // requests held right now still go through
+    await a.waitForTimeout(3000); // the check settles; a queued tap would have reached the tie toast or a dialog by now
+    await expect(a.locator('.toast-message', { hasText: 'tie' })).toHaveCount(0);
+    await a.evaluate(() => window.scrollTo(0, 0)); // the body click below must not land on a leaderboard row
     await expect(a.locator('.tournament-match-banner .banner-game')).toHaveText(gameName);
     for (const id of ['#teamA1', '#teamA2', '#teamB1', '#teamB2']) await expect(a.locator(id)).toBeDisabled();
     expect(await selectValues(a)).toEqual(swapped);

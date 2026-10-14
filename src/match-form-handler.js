@@ -191,7 +191,8 @@ function getSeasonElo(playerName) {
 export function setupMatchForm() {
     submitMatchBtn.addEventListener("click", async (e) => {
         e.preventDefault();
-        await tournamentCheck; // a restored tournament game may turn out to be logged already
+        // a restored tournament game may turn out to be logged already; taps meanwhile must not queue up submits
+        if (tournamentChecking) return showToast('Checking the tournament game…', 'info');
         const tA1 = teamA1Select.value.trim();
         const tA2 = teamA2Select.value.trim();
         const tB1 = teamB1Select.value.trim();
@@ -724,7 +725,7 @@ function restoreSaved() {
     if (saved?.tournament && !getActiveTournamentGame()) resumeTournamentGame(saved.tournament);
 }
 
-let tournamentCheck = null; // the server check of a restored tournament game; a submit waits for it
+let tournamentChecking = false; // the server check of a restored tournament game is pending; no submit until it settles
 
 /** A tournament game restored after a reload: banner, locked selects and side mapping now; the server
  *  decides afterwards whether it is still playable (like the betting resume decides the live claim). */
@@ -733,9 +734,10 @@ function resumeTournamentGame(game) {
     setActiveTournamentGame(game);
     setPlayerSelectsLocked(true);
     showTournamentBanner(game.tournamentName, game.gameName);
-    tournamentCheck = canStillPlay(game).then((ok) => {
+    tournamentChecking = true;
+    canStillPlay(game).then((ok) => {
         if (!ok && getActiveTournamentGame() === game) dropTournamentGame(); // not if cancelled/submitted/replaced meanwhile
-    });
+    }).finally(() => { tournamentChecking = false; });
 }
 
 /** The restored game was logged on another phone or its tournament is gone: back to how it was before this
