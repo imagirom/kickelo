@@ -89,10 +89,14 @@ export function resolveChallenge(bet, matches, now) {
     : { status: 'lost', matchId: match.id, challengerPayout: 0, acceptorPayout: pot };
 }
 
-function book(wallets, days, player, ms, stake, payout, isOpen, today) {
-  const w = wallets.get(player) || { balance: 0, todayDelta: 0, open: 0 };
-  if (!days.has(player)) days.set(player, new Set());
-  days.get(player).add(dayKey(ms));
+function book(wallets, days, player, ms, stake, payout, status, today) {
+  const w = wallets.get(player) || { balance: 0, todayDelta: 0, open: 0, allowanceToday: 0 };
+  if (!days.has(player)) days.set(player, new Map());
+  const d = dayKey(ms);
+  // stake actually at risk that day; refunded/cancelled stakes don't use the allowance
+  const atRisk = status === 'refunded' || status === 'cancelled' ? 0 : stake;
+  days.get(player).set(d, (days.get(player).get(d) || 0) + atRisk);
+  const isOpen = status === 'open' || status === 'pending';
   const net = payout - stake;
   w.balance += net;
   if (isOpen) w.open++;
@@ -109,17 +113,24 @@ export function computeBalances(bets, matches, now, cfg = BETTING) {
     if (bet.void) continue;
     if (bet.kind === 'house') {
       const r = resolveHouseBet(bet, index, now);
-      book(wallets, days, bet.bettor, bet.placedAt, bet.stake, r.payout, r.status === 'open', today);
+      book(wallets, days, bet.bettor, bet.placedAt, bet.stake, r.payout, r.status, today);
     } else if (bet.kind === 'challenge') {
       const r = resolveChallenge(bet, index, now);
-      const isOpen = r.status === 'open' || r.status === 'pending';
-      book(wallets, days, bet.challenger, bet.placedAt, bet.challengerStake, r.challengerPayout, isOpen, today);
+      book(wallets, days, bet.challenger, bet.placedAt, bet.challengerStake, r.challengerPayout, r.status, today);
       if (bet.acceptedBy && typeof bet.acceptedAt === 'number') {
-        book(wallets, days, bet.acceptedBy, bet.acceptedAt, bet.opponentStake, r.acceptorPayout, isOpen, today);
+        book(wallets, days, bet.acceptedBy, bet.acceptedAt, bet.opponentStake, r.acceptorPayout, r.status, today);
       }
     }
   }
-  for (const [player, w] of wallets) w.balance += cfg.dailyAllowance * days.get(player).size;
+  // Use it or lose it: a day credits the allowance only as far as it was staked (winnings stay).
+  // Days before pocketSince credit the full allowance for any bet, as before.
+  for (const [player, w] of wallets) {
+    for (const [d, staked] of days.get(player)) {
+      const credit = d < cfg.pocketSince ? cfg.dailyAllowance : Math.min(cfg.dailyAllowance, staked);
+      w.balance += credit;
+      if (d === today) w.allowanceToday = credit;
+    }
+  }
   return wallets;
 }
 

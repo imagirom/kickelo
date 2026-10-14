@@ -9,6 +9,7 @@ export const BETTING = {
   margin: 0.05,
   oddsClamp: [1.05, 10],
   dailyAllowance: 20,
+  pocketSince: new Date(2026, 9, 15).getTime(),  // from this day on, unstaked allowance expires at day end
   undoWindowMs: 5000,
   maxStake: 10000,        // also enforced in firestore.rules (isStake)
   stakeChips: [5, 10, 25],

@@ -3,7 +3,7 @@
 import { db, collection, doc, addDoc, updateDoc, onSnapshot, serverTimestamp, runTransaction, getDoc } from '../firebase-service.js';
 import { allMatches } from '../match-data-service.js';
 import { BETTING } from './betting-config.js';
-import { computeBalances, checkBet, resolveHouseBet, resolveChallenge, dayKey, acceptDecision, deniedChallengeReason } from './ledger.js';
+import { computeBalances, checkBet, resolveHouseBet, resolveChallenge, acceptDecision, deniedChallengeReason } from './ledger.js';
 import { getCurrentMatch } from './current-match-service.js';
 import { teamKey } from '../teams/team-identity.js';
 
@@ -44,14 +44,10 @@ export function getOpenBetsFor(key) {
     || (b.kind === 'challenge' && ['open', 'pending'].includes(resolveChallenge(b, matches, now).status))));
 }
 
-/** Spendable now: wallet balance, plus today's allowance if no bet placed today. */
+/** Spendable now: wallet balance plus the part of today's allowance not yet staked. */
 export function available(bettor) {
   const w = getBalances().get(bettor);
-  const today = dayKey(Date.now());
-  const hasBetToday = allBets.some((b) => !b.void && (
-    ((b.bettor === bettor || b.challenger === bettor) && dayKey(b.placedAt) === today)
-    || (b.acceptedBy === bettor && typeof b.acceptedAt === 'number' && dayKey(b.acceptedAt) === today)));
-  return (w?.balance ?? 0) + (hasBetToday ? 0 : BETTING.dailyAllowance);
+  return (w?.balance ?? 0) + BETTING.dailyAllowance - (w?.allowanceToday ?? 0);
 }
 
 /** outcome: { test, team, threshold?, negate?, propId? }; propId (prop bets) is only used to look up odds.

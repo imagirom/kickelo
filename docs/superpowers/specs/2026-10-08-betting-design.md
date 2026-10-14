@@ -169,11 +169,13 @@ refunded.
 - Challenge: winner receives both stakes.
 
 **Balance** of a player =
-`dailyAllowance × (number of days on which they placed ≥ 1 non-void bet or challenge)`
+Σ over their betting days of `min(dailyAllowance, stake at risk that day)`
 − stakes of their open and resolved bets + payouts + refunds.
-Accepting a challenge counts as a bet for the allowance and deducts the opponent stake.
-When checking a stake, today's allowance is included even before the player's first
-bet of the day (the bet itself earns it). The client blocks stakes larger than the
+Use it or lose it: the daily allowance is credited only as far as it is actually staked that
+day; the unstaked rest expires at midnight, winnings stay. Refunded or cancelled stakes don't
+use the allowance (no refund farm). Days before `BETTING.pocketSince` (2026-10-15) keep the old
+rule: the full allowance for any day with ≥ 1 non-void bet. Accepting a challenge counts as a
+bet and deducts the opponent stake. Spendable now = balance + allowance − today's credit. The client blocks stakes larger than the
 balance, for placing and for accepting (trust-based; not enforced in rules).
 
 **Rules hook:** `checkBet(bet, context) → { ok: true } | { ok: false, reason }`.

@@ -132,7 +132,7 @@ console.log('\n=== ledger ===');
   assertEq(bal.has('Peter'), false, 'void-only bettor has no wallet');
   assertEq(bal.get('Simon').todayDelta, 18, 'todayDelta excludes allowance: +18 net from bets');
   const open = computeBalances([bet(day)], [], day + 1000);
-  assertEq(open.get('Simon'), { balance: BETTING.dailyAllowance - 20, todayDelta: -20, open: 1 }, 'open bet: stake held');
+  assertEq(open.get('Simon'), { balance: BETTING.dailyAllowance - 20, todayDelta: -20, open: 1, allowanceToday: BETTING.dailyAllowance }, 'open bet: stake held');
   const twoDays = computeBalances([bet(day), bet(day + 24 * 3600 * 1000)], [], day + 3 * 24 * 3600 * 1000);
   assertEq(twoDays.get('Simon').balance, 2 * BETTING.dailyAllowance, 'two days of allowance, both refunded');
   assertEq(dayKey(day + 3600 * 1000), dayKey(day), 'dayKey groups by local day');
@@ -367,7 +367,7 @@ console.log('\n=== challenges in the ledger ===');
   assertEq(bal.get('Simon').balance, BETTING.dailyAllowance - 10 + 40, 'challenger balance after a win');
   assertEq(bal.get('Peter').balance, BETTING.dailyAllowance - 30, 'acceptor balance after a loss (allowance counted)');
   const open = computeBalances([ch()], [], day + 1000);
-  assertEq(open.get('Simon'), { balance: BETTING.dailyAllowance - 10, todayDelta: -10, open: 1 }, 'open challenge holds the challenger stake');
+  assertEq(open.get('Simon'), { balance: BETTING.dailyAllowance - 10, todayDelta: -10, open: 1, allowanceToday: BETTING.dailyAllowance }, 'open challenge holds the challenger stake');
   assertEq(open.has('Peter'), false, 'no acceptor yet -> no wallet');
   assertEq(computeBalances([ch({ void: true })], [], day + 1000).size, 0, 'withdrawn challenge ignored');
 }
@@ -418,6 +418,30 @@ console.log('\n=== day end ===');
   assertEq(resolveHouseBet(hb, [], nextDay).status, 'refunded', 'refunded after midnight');
   const short = { ...hb, placedAt: new Date(2026, 2, 29, 1).getTime() }; // 23-hour day
   assertEq(resolveHouseBet(short, [], new Date(2026, 2, 30, 0, 5).getTime()).status, 'refunded', 'refunded right after midnight on a 23-hour day');
+}
+
+console.log('\n=== daily allowance: use it or lose it ===');
+{
+  const day = new Date(2026, 9, 20, 12).getTime();
+  const D = 24 * 3600 * 1000;
+  const A = BETTING.dailyAllowance;
+  const pocket = { ...BETTING, pocketSince: 0 };
+  const R = ['Manuel', 'Marc']; const B = ['Roman', 'Tobi'];
+  const key = 'Manuel::Marc|Roman::Tobi';
+  const hb = (placedAt, stake, extra = {}) => ({ kind: 'house', matchupKey: key, placedAt, bettor: 'Simon', stake, odds: 2,
+    outcome: { test: 'winner', team: R }, void: false, ...extra });
+  const lost = (ts) => ({ id: `m${ts}`, timestamp: ts, teamA: R, teamB: B, winner: 'B', goalsA: 3, goalsB: 5, matchDuration: 200000, goalLog: [{ team: 'blue', timestamp: 100000 }] });
+  const now = day + 7 * D;
+
+  const ones = [0, 1, 2, 3, 4, 5, 6].map((i) => hb(day + i * D, 1));
+  const onesLost = computeBalances(ones, ones.map((b) => lost(b.placedAt + 300000)), now, pocket);
+  assertEq(onesLost.get('Simon').balance, 0, '1 a day, all lost: each day credits only the 1 staked');
+  assertEq(computeBalances(ones, ones.map((b) => lost(b.placedAt + 300000)), now, { ...pocket, pocketSince: day + 30 * D }).get('Simon').balance, 7 * (A - 1), 'before the cutoff a day still credits the full allowance');
+  assertEq(computeBalances([hb(day, 50)], [lost(day + 300000)], now, pocket).get('Simon').balance, A - 50, 'stakes above the allowance credit it fully, no more');
+  assertEq(computeBalances([hb(day, 5)], [], day + 3 * D, pocket).get('Simon').balance, 0, 'refunded stake credits nothing (no refund farm)');
+  const open = computeBalances([hb(day, 5)], [], day + 1000, pocket).get('Simon');
+  assertEq([open.balance, open.allowanceToday], [0, 5], 'open bet: its stake is paid from today\'s allowance');
+  assertEq(open.balance + A - open.allowanceToday, A - 5, 'spendable today = balance + unused allowance');
 }
 
 console.log('\n=== balances over many matches (indexed) ===');
