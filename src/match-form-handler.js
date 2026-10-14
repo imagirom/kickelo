@@ -28,6 +28,7 @@ import { allMatches } from './match-data-service.js';
 import { computeAllPlayerStats } from './player-stats-batch.js';
 import { getStatusBadges } from './leaderboard-display.js';
 import { createTimelineWithLabel, shownElapsed } from './match-timeline.js';
+import { loadSaved, save } from './match-restore.js';
 import { getActiveTournamentGame, clearActiveTournamentGame, completeTournamentMatch } from './tournament/tournament-ui.js';
 
 /**
@@ -444,6 +445,7 @@ export function resetMatchForm() {
     teamA2Select.value = "";
     teamB1Select.value = "";
     teamB2Select.value = "";
+    save({ lineup: null });
     teamAgoalsInput.value = "0";
     teamBgoalsInput.value = "0";
     stopLiveMatchTimer(); // Also stop timer on reset
@@ -640,17 +642,7 @@ async function setLiveMode(enabled, skipPrompt = false) {
     }
     liveMode = enabled;
     window.dispatchEvent(new CustomEvent(enabled ? 'live-started' : 'live-ended'));
-    liveMatchPanel.style.display = enabled ? 'flex' : 'none';
-    toggleLiveMode.style.display = enabled ? 'none' : '';
-    const cancelBtn = document.getElementById('cancelLiveMode');
-    if (cancelBtn) cancelBtn.style.display = enabled ? '' : 'none';
-    toggleLiveMode.classList.toggle('active', enabled);
-    toggleLiveMode.textContent = enabled ? 'Live Match Mode' : 'Start live mode';
-    // Fix: Hide liveModeStatus span when not needed to remove gap
-    liveModeStatus.style.display = enabled ? '' : 'none';
-    liveModeStatus.textContent = '';
-    teamAgoalsInput.disabled = enabled;
-    teamBgoalsInput.disabled = enabled;
+    showLiveUI(enabled);
     if (enabled) {
         matchStartTime = Date.now();
         unlock(); // resume AudioContext from this user gesture (mobile autoplay)
@@ -665,9 +657,7 @@ async function setLiveMode(enabled, skipPrompt = false) {
         teamBgoalsInput.value = '0';
         startLiveMatchTimer();
         requestWakeLock();
-        // Fix: Always show timer when live mode starts
-        const timerElem = document.getElementById('liveMatchTimer');
-        if (timerElem) timerElem.style.display = 'inline-block';
+        saveLive();
     } else {
         matchStartTime = null;
         goalLog = [];
@@ -675,10 +665,62 @@ async function setLiveMode(enabled, skipPrompt = false) {
         stopLiveMatchTimer();
         wakeLock?.release();
         wakeLock = null;
-        // Fix: Hide timer when not in live mode
-        const timerElem = document.getElementById('liveMatchTimer');
-        if (timerElem) timerElem.style.display = 'none';
+        save({ live: null });
     }
+}
+
+function showLiveUI(enabled) {
+    liveMatchPanel.style.display = enabled ? 'flex' : 'none';
+    toggleLiveMode.style.display = enabled ? 'none' : '';
+    const cancelBtn = document.getElementById('cancelLiveMode');
+    if (cancelBtn) cancelBtn.style.display = enabled ? '' : 'none';
+    toggleLiveMode.classList.toggle('active', enabled);
+    toggleLiveMode.textContent = enabled ? 'Live Match Mode' : 'Start live mode';
+    // Fix: Hide liveModeStatus span when not needed to remove gap
+    liveModeStatus.style.display = enabled ? '' : 'none';
+    liveModeStatus.textContent = '';
+    teamAgoalsInput.disabled = enabled;
+    teamBgoalsInput.disabled = enabled;
+    const timerElem = document.getElementById('liveMatchTimer');
+    if (timerElem) timerElem.style.display = enabled ? 'inline-block' : 'none';
+}
+
+// --- Surviving reloads: mobile browsers may drop the tab while another app (e.g. Spotify) is open ---
+const saveLive = () => save({ live: { startedAt: matchStartTime, goalLog } });
+window.addEventListener('live-goal', () => { if (liveMode) saveLive(); });
+
+let restoreDone = false; // the lineup is only saved once the saved one was restored, so the page load can't wipe it
+window.addEventListener('lineup-changed', () => {
+    if (restoreDone) save({ lineup: [teamA1Select, teamA2Select, teamB1Select, teamB2Select].map((s) => s.value) });
+});
+
+/** Silently restores today's lineup and live match (clock keeps running from the original start). */
+function restoreSaved() {
+    if (restoreDone) return;
+    const saved = loadSaved();
+    const selects = [teamA1Select, teamA2Select, teamB1Select, teamB2Select];
+    if (saved?.lineup && selects.every((s) => !s.value)) {
+        selects.forEach((s, i) => { s.value = saved.lineup[i] || ''; });
+        notifyRolesChanged();
+    }
+    restoreDone = true;
+    if (saved?.live && !liveMode) {
+        liveMode = true;
+        matchStartTime = saved.live.startedAt;
+        goalLog = saved.live.goalLog || [];
+        showLiveUI(true);
+        renderGoalTimeline();
+        startLiveMatchTimer();
+        requestWakeLock();
+        window.dispatchEvent(new CustomEvent('live-started', { detail: { resumed: true, goalLog: goalLog.slice() } }));
+    }
+}
+// after the player dropdowns are filled (player-manager listens to the same event)
+window.addEventListener('players-updated', () => setTimeout(restoreSaved, 0));
+
+/** Ends live mode without the discard prompt (a resumed match another phone has replaced). */
+export function dropLiveMode() {
+    setLiveMode(false, true);
 }
 
 toggleLiveMode.addEventListener('click', () => setLiveMode(!liveMode));
@@ -779,6 +821,7 @@ function updateScoredButtons() {
 
 btnRedScored.addEventListener('click', () => {
     if (!liveMode) return;
+    unlock(); // a live match resumed after a reload has no audio until a tap
     const redGoals = goalLog.filter(g => g.team === 'red').length;
     const blueGoals = goalLog.filter(g => g.team === 'blue').length;
     if (redGoals >= MAX_GOALS) return;
@@ -794,6 +837,7 @@ btnRedScored.addEventListener('click', () => {
 });
 btnBlueScored.addEventListener('click', () => {
     if (!liveMode) return;
+    unlock(); // a live match resumed after a reload has no audio until a tap
     const redGoals = goalLog.filter(g => g.team === 'red').length;
     const blueGoals = goalLog.filter(g => g.team === 'blue').length;
     if (blueGoals >= MAX_GOALS) return;

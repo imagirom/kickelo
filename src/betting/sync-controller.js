@@ -7,12 +7,12 @@ import { getTeamRecord } from '../teams/team-service.js';
 import { showConfirm, showToast } from '../toast.js';
 import { BETTING } from './betting-config.js';
 import { matchupKey, isFullLineup } from './matchup.js';
-import { shouldClearAfterSubmit, shouldPublishLineup, needsOverwriteConfirm, isLiveTakeover, ownsLive, showNotSharedHint, liveStartQuestion } from './current-match.js';
+import { shouldClearAfterSubmit, shouldPublishLineup, needsOverwriteConfirm, isLiveTakeover, ownsLive, showNotSharedHint, liveStartQuestion, resumeOverridden } from './current-match.js';
 import { getCurrentMatch, publishLineup, publishPositions, publishLiveStart, publishGoal, publishLiveEnd } from './current-match-service.js';
 import { getBets } from './bets-service.js';
 import { openStakeFor } from './ledger.js';
 import { allMatches } from '../match-data-service.js';
-import { setLiveStartGuard, notifyRolesChanged } from '../match-form-handler.js';
+import { setLiveStartGuard, notifyRolesChanged, dropLiveMode } from '../match-form-handler.js';
 
 let initialized = false;
 let liveId = null; // set once this device's live claim has committed (the shared doc may say otherwise later)
@@ -32,6 +32,16 @@ let syncScheduled = false;
 let syncing = false;
 let rerun = false;
 let lastWarnAt = 0;
+let snapshotSeen = false;
+let pendingResume = false; // live match restored after a reload, waiting for the shared doc
+const CLAIM_KEY = 'kickelo.liveClaim'; // this phone's live claim, so a reload keeps ownership
+
+function storeClaim(claim) {
+  try { localStorage.setItem(CLAIM_KEY, JSON.stringify(claim)); } catch { /* best-effort */ }
+}
+function storedClaim() {
+  try { return JSON.parse(localStorage.getItem(CLAIM_KEY)) || {}; } catch { return {}; }
+}
 
 export function isLiveOnThisDevice() {
   return ownsLive(getCurrentMatch(), liveId);
@@ -172,6 +182,7 @@ function claimed(claim, key, goals, epoch) {
   if (epoch !== liveEpoch) { publishLiveEnd({ liveId: claim }).catch(warn); return; }
   liveId = claim;
   liveKey = key;
+  storeClaim({ liveId: claim, key });
   if (localGoals !== goals) pushGoals();
 }
 
@@ -242,13 +253,36 @@ function scheduleSync() {
   }, 0);
 }
 
+/** A live match restored after a reload: keep this phone's claim if the shared doc still carries it
+ *  (and catch up on goals), drop the match if the shared match moved on, else claim it now. */
+function resume() {
+  pendingResume = false;
+  const claim = storedClaim();
+  if (resumeOverridden(getCurrentMatch(), claim.liveId)) {
+    liveId = null;
+    dropLiveMode();
+    showToast('This live match was replaced on another phone.', 'info');
+    return;
+  }
+  if (claim.liveId) {
+    liveId = claim.liveId;
+    liveKey = claim.key;
+    pushGoals();
+  }
+  scheduleSync();
+}
+
 export function initSyncController() {
   if (initialized || !BETTING.enabled || !BETTING.liveSync) return;
   initialized = true;
   setLiveStartGuard(liveStartGuard);
   stablePositions = readLineup().positions;
 
-  window.addEventListener('current-match-updated', renderNotShared);
+  window.addEventListener('current-match-updated', () => {
+    snapshotSeen = true;
+    if (pendingResume) resume();
+    renderNotShared();
+  });
 
   window.addEventListener('lineup-changed', () => {
     if (restoring) return; // our own revert after a declined dialog
@@ -256,7 +290,16 @@ export function initSyncController() {
     scheduleSync();
   });
 
-  window.addEventListener('live-started', () => {
+  window.addEventListener('live-started', (e) => {
+    if (e.detail?.resumed) {
+      liveEpoch++;
+      liveLocal = true;
+      localGoals = e.detail.goalLog || [];
+      stablePositions = readLineup().positions;
+      pendingResume = true;
+      if (snapshotSeen) resume();
+      return;
+    }
     liveEpoch++;
     liveId = null;
     liveKey = null;
@@ -289,6 +332,8 @@ export function initSyncController() {
     liveKey = null;
     liveLocal = false;
     localGoals = [];
+    pendingResume = false;
+    storeClaim(null);
     if (mine) publishLiveEnd({ liveId: mine }).catch(warn);
     renderNotShared();
   });

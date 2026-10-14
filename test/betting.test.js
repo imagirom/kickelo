@@ -4,10 +4,11 @@ import { BETTING, houseBetsActive } from '../src/betting/betting-config.js';
 import { matchupKey, isFullLineup, sameTeam } from '../src/betting/matchup.js';
 import { goalProbability, scorelineDistribution, winProbability, toOdds, logLikelihood, pathDistribution, outcomeProbability, normalCdf } from '../src/betting/model.js';
 import { dayKey, firstGoalAt, resolveHouseBet, resolveChallenge, isLockedIn, computeBalances, checkBet, openStakeFor, acceptDecision, deniedChallengeReason } from '../src/betting/ledger.js';
-import { liveStartQuestion, shouldClearAfterSubmit, buildOffer, shouldPublishLineup, needsOverwriteConfirm, goalUpdate, isLiveTakeover, ownsLive, showNotSharedHint, liveClaimUpdate } from '../src/betting/current-match.js';
+import { resumeOverridden, liveStartQuestion, shouldClearAfterSubmit, buildOffer, shouldPublishLineup, needsOverwriteConfirm, goalUpdate, isLiveTakeover, ownsLive, showNotSharedHint, liveClaimUpdate } from '../src/betting/current-match.js';
 import params from '../src/betting/model-params.json' with { type: 'json' };
 import { OUTCOME_TESTS, evaluateOutcome, describeOutcome } from '../src/betting/outcomes.js';
 import { shownElapsed } from '../src/match-timeline.js';
+import { loadSaved, save } from '../src/match-restore.js';
 import { candidateProps, eligible, drawProps, seededRandom } from '../src/betting/props.js';
 
 let passed = 0;
@@ -454,6 +455,29 @@ console.log('\n=== live clock stops at the deciding goal ===');
   assertEq(shownElapsed([...fourFour, g('red', 90000), g('blue', 95000)], 120000), 90000, 'misclick 5:5: still the first team to 5');
   assertEq(shownElapsed([...fourFour, g('blue', 95000)], 120000), 95000, 'misclicked goal deleted: the correct decider');
   assertEq(shownElapsed(undefined, 5000), 5000, 'no goal log');
+}
+
+console.log('\n=== live match survives a reload ===');
+{
+  const mem = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v) }; };
+  const st = mem();
+  const t = new Date(2026, 9, 14, 12).getTime();
+  assertEq(loadSaved(t, st), null, 'nothing saved');
+  save({ lineup: ['A', 'B', 'C', 'D'] }, t, st);
+  save({ live: { startedAt: t - 60000, goalLog: [{ team: 'red', timestamp: 30000 }] } }, t + 1000, st);
+  assertEq(loadSaved(t + 2000, st).lineup, ['A', 'B', 'C', 'D'], 'a live save keeps the lineup');
+  assertEq(loadSaved(t + 2000, st).live.goalLog.length, 1, 'goal log restored');
+  assertEq(loadSaved(new Date(2026, 9, 14, 23, 59).getTime(), st) !== null, true, 'kept until the end of the day (rain break)');
+  assertEq(loadSaved(new Date(2026, 9, 15, 0, 1).getTime(), st), null, 'gone the next day');
+  assertEq(loadSaved(t, { getItem: () => '{bad json' }), null, 'corrupt storage -> nothing');
+  assertEq(loadSaved(t, { getItem: () => { throw new Error('blocked'); } }), null, 'blocked storage -> nothing');
+
+  assertEq(resumeOverridden({ liveId: 'mine' }, 'mine'), false, 'shared doc still has this phone\'s claim -> resume');
+  assertEq(resumeOverridden({ liveId: 'other' }, 'mine'), true, 'another phone took over -> drop');
+  assertEq(resumeOverridden({ liveId: null, matchupKey: 'x' }, 'mine'), true, 'claim ended elsewhere (result logged / replaced) -> drop');
+  assertEq(resumeOverridden(null, 'mine'), true, 'shared doc gone -> drop');
+  assertEq(resumeOverridden({ liveId: null }, null), false, 'never claimed (offline start), nobody live -> resume and claim');
+  assertEq(resumeOverridden({ liveId: 'other' }, null), true, 'never claimed, another phone live -> drop');
 }
 
 console.log('\n=== balances over many matches (indexed) ===');

@@ -413,3 +413,63 @@ test('pre-match challenges close at the first goal; results stay visible after t
     await deleteMatchesSince(since - 60000);
   }
 });
+
+test('a reload mid-match (e.g. a Spotify link) resumes the live match and keeps live scoring here', async ({ browser }) => {
+  const { ctx, page: a } = await openPhone(browser);
+  const { ctx: ctxB, page: b } = await openPhone(browser);
+  const names = await playerNames(a);
+  await pickLineup(a, names.slice(0, 4));
+  await a.click('#toggleLiveMode');
+  await a.click('#btnRedScored');
+  await a.click('#btnBlueScored');
+  await expect.poll(async () => (await shared())?.goalLog?.arrayValue?.values?.length ?? 0, { timeout: 10000 }).toBe(2);
+  const claim = (await shared()).liveId.stringValue;
+  await a.waitForTimeout(2200);
+
+  await a.reload();
+  await a.waitForFunction(() => document.querySelectorAll('#teamA1 option').length > 6);
+  // silently back in live mode: lineup, goals and the running clock
+  await expect(a.locator('#liveMatchPanel')).toBeVisible();
+  await expect(a.locator('#teamA1')).toHaveValue(names[0]);
+  await expect(a.locator('#teamB2')).toHaveValue(names[3]);
+  await expect(a.locator('.goal-log-item')).toHaveCount(2);
+  await expect(a.locator('#liveMatchTimer')).not.toHaveText(/00:0[01]/);
+  await expect(a.locator('.confirm-dialog')).toHaveCount(0);
+  // still this phone's live match: the next goal reaches the other phones, no takeover
+  await a.click('body');
+  await a.click('#btnRedScored');
+  await expect.poll(async () => (await shared())?.goalLog?.arrayValue?.values?.length ?? 0, { timeout: 10000 }).toBe(3);
+  expect((await shared()).liveId.stringValue).toBe(claim);
+  await expect(b.locator('#betsBox .bets-live-score')).toHaveText('2 : 1', { timeout: 10000 });
+  await expect(a.locator('.confirm-dialog')).toHaveCount(0);
+
+  // While A is gone, B starts another live match: A's saved match is dropped on return.
+  const aUrl = a.url();
+  await a.close();
+  await pickLineup(b, [names[4], names[5], names[6], names[7]]);
+  await b.locator('.confirm-dialog .confirm-btn-ok').click(); // replace the shared (live) match
+  await b.click('#toggleLiveMode');
+  await expect.poll(async () => (await shared())?.matchupKey?.stringValue ?? '', { timeout: 10000 }).toContain(names[4]);
+  const a2 = await ctx.newPage();
+  await a2.goto(aUrl);
+  await a2.waitForFunction(() => document.querySelectorAll('#teamA1 option').length > 6);
+  await expect(a2.locator('.toast-message', { hasText: 'replaced on another phone' })).toBeVisible({ timeout: 10000 });
+  await expect(a2.locator('#liveMatchPanel')).toBeHidden();
+  await expect(a2.locator('.goal-log-item')).toHaveCount(0);
+  expect((await shared()).matchupKey.stringValue).toContain(names[4]); // B's match untouched
+  await ctx.close();
+  await ctxB.close();
+});
+
+test('the lineup survives a reload without live mode', async ({ browser }) => {
+  const { ctx, page: a } = await openPhone(browser);
+  const names = await playerNames(a);
+  await pickLineup(a, names.slice(0, 4));
+  await a.reload();
+  await a.waitForFunction(() => document.querySelectorAll('#teamA1 option').length > 6);
+  await expect(a.locator('#teamA2')).toHaveValue(names[1]);
+  await expect(a.locator('#teamB1')).toHaveValue(names[2]);
+  await expect(a.locator('#liveMatchPanel')).toBeHidden();
+  await expect(a.locator('.confirm-dialog')).toHaveCount(0);
+  await ctx.close();
+});

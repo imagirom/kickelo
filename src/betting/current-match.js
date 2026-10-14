@@ -53,6 +53,13 @@ export function isLiveTakeover(current, newKey) {
   return Boolean(current?.liveStartedAt || current?.liveId) && current.matchupKey === newKey;
 }
 
+/** A live match restored after a reload is dropped if the shared match moved on meanwhile: another
+ *  phone went live, or this phone's claim was replaced or ended (e.g. the result was logged elsewhere). */
+export function resumeOverridden(current, claimId) {
+  if (claimId) return current?.liveId !== claimId;
+  return Boolean(current?.liveId);
+}
+
 /** Only the device whose liveId is in the shared doc writes goals / ends the live match. */
 export function ownsLive(current, liveId) {
   return Boolean(liveId) && current?.liveId === liveId;
