@@ -473,3 +473,108 @@ test('the lineup survives a reload without live mode', async ({ browser }) => {
   await expect(a.locator('.confirm-dialog')).toHaveCount(0);
   await ctx.close();
 });
+
+// Two teams in single elimination: one ready game. Seeded in the page with the app's own module instance.
+const seedTournament = (page, players) => page.evaluate(async (ps) => {
+  const s = await import('/src/tournament/tournament-service.js');
+  const id = await s.createTournament('e2e reload ' + Date.now());
+  await s.addTeam(id, [ps[0], ps[1]]);
+  await s.addTeam(id, [ps[2], ps[3]]);
+  await s.updateTournamentConfig(id, { format: 'single_elim' });
+  await s.lockTournament(id);
+  return id;
+}, players);
+const tournamentDoc = async (id) => (await (await fetch(`${DOCS}/tournaments/${id}`, { headers: OWNER })).json()).fields;
+const selectValues = (page) => page.$$eval('#teamA1, #teamA2, #teamB1, #teamB2', (ss) => ss.map((s) => s.value));
+
+async function startTournamentGame(page, tid) {
+  await page.click(`.tournament-card[data-id="${tid}"]`);
+  await page.click('#playNextGameBtn');
+  await expect(page.locator('.tournament-match-banner')).toBeVisible();
+  await expect(page.locator('#teamA1')).toBeDisabled();
+}
+
+test('a reload mid tournament game restores the game; a game logged elsewhere meanwhile is dropped', async ({ browser }) => {
+  test.setTimeout(90000);
+  const since = Date.now();
+  const { ctx, page: a } = await openPhone(browser);
+  const { ctx: ctxB, page: b } = await openPhone(browser);
+  const tids = [];
+  try {
+    const names = await playerNames(a);
+    tids.push(await seedTournament(a, names.slice(0, 4)));
+    await startTournamentGame(a, tids[0]);
+    const gameName = (await a.locator('.tournament-match-banner .banner-game').textContent()).trim();
+    const team0 = (await selectValues(a)).slice(0, 2);
+    await a.click('#swapTeams');
+    await a.click('#toggleLiveMode');
+    await a.click('#btnRedScored');
+    await a.click('#btnBlueScored');
+    const swapped = await selectValues(a);
+    expect(swapped.slice(2)).toEqual(team0);
+    await expect.poll(async () => (await shared())?.goalLog?.arrayValue?.values?.length ?? 0, { timeout: 10000 }).toBe(2); // live claim committed
+
+    await a.reload();
+    await a.waitForFunction(() => document.querySelectorAll('#teamA1 option').length > 6);
+    await expect(a.locator('.tournament-match-banner .banner-game')).toHaveText(gameName);
+    for (const id of ['#teamA1', '#teamA2', '#teamB1', '#teamB2']) await expect(a.locator(id)).toBeDisabled();
+    expect(await selectValues(a)).toEqual(swapped);
+    await expect(a.locator('#liveMatchPanel')).toBeVisible();
+    await expect(a.locator('.goal-log-item')).toHaveCount(2);
+    await expect(a.locator('.confirm-dialog')).toHaveCount(0);
+
+    // Red (team1 after the swap) wins 5:1; the tournament gets winner 1 and the score in its team order.
+    await a.click('body');
+    for (let i = 0; i < 4; i++) await a.click('#btnRedScored');
+    await a.click('#submitMatchBtn');
+    await expect(a.locator('.confirm-dialog')).toContainText('positions');
+    await a.locator('.confirm-btn-ok').click();
+    await a.locator('.confirm-dialog', { hasText: 'Confirm match submission' }).locator('.confirm-btn-ok').click();
+    await expect.poll(async () => (await tournamentDoc(tids[0])).games.arrayValue.values[0].mapValue.fields.status.stringValue, { timeout: 10000 }).toBe('completed');
+    const result = (await tournamentDoc(tids[0])).games.arrayValue.values[0].mapValue.fields.result.mapValue.fields;
+    expect(Number(result.winner.integerValue)).toBe(1);
+    expect(result.score.arrayValue.values.map((v) => Number(v.integerValue))).toEqual([1, 5]);
+    const logged = await matchesSince(since);
+    expect(logged.length).toBe(1);
+    expect(logged[0].document.fields.tournamentId.stringValue).toBe(tids[0]);
+    await expect(a.locator('.tournament-match-banner')).toHaveCount(0);
+
+    // A second game goes live on A; while A is gone its result is logged on B: A drops it on return.
+    tids.push(await seedTournament(a, names.slice(0, 4)));
+    await a.reload();
+    await a.waitForFunction(() => document.querySelectorAll('#teamA1 option').length > 6);
+    await startTournamentGame(a, tids[1]);
+    await a.click('#toggleLiveMode');
+    await a.click('#btnRedScored');
+    await expect.poll(async () => (await shared())?.goalLog?.arrayValue?.values?.length ?? 0, { timeout: 10000 }).toBe(1);
+    const claim = (await shared()).liveId.stringValue;
+    const aUrl = a.url();
+    await a.close();
+    await b.evaluate(async (id) => {
+      const s = await import('/src/tournament/tournament-service.js');
+      const t = await s.fetchTournament(id);
+      await s.submitTournamentGameResult(id, t.games[0].id, 0, 'e2e-elsewhere', [5, 3]).catch(() => {}); // stamping the absent match fails after the result is written
+    }, tids[1]);
+    expect((await tournamentDoc(tids[1])).games.arrayValue.values[0].mapValue.fields.status.stringValue).toBe('completed');
+    const a2 = await ctx.newPage();
+    await a2.goto(aUrl);
+    await a2.waitForFunction(() => document.querySelectorAll('#teamA1 option').length > 6);
+    await expect(a2.locator('.toast-message', { hasText: 'already played or removed' })).toBeVisible({ timeout: 10000 });
+    await expect(a2.locator('.tournament-match-banner')).toHaveCount(0);
+    await expect(a2.locator('#teamA1')).toBeEnabled();
+    expect(await selectValues(a2)).toEqual(['', '', '', '']);
+    await expect(a2.locator('#liveMatchPanel')).toBeHidden();
+    await expect(a2.locator('.confirm-dialog')).toHaveCount(0);
+    await expect.poll(async () => (await shared())?.liveId?.stringValue ?? null, { timeout: 10000 }).not.toBe(claim);
+    await a2.reload();
+    await a2.waitForFunction(() => document.querySelectorAll('#teamA1 option').length > 6);
+    await a2.waitForTimeout(1000);
+    await expect(a2.locator('.tournament-match-banner')).toHaveCount(0);
+    expect(await selectValues(a2)).toEqual(['', '', '', '']);
+  } finally {
+    await ctx.close();
+    await ctxB.close();
+    await Promise.all(tids.map((id) => fetch(`${DOCS}/tournaments/${id}`, { method: 'DELETE', headers: OWNER })));
+    await deleteMatchesSince(since - 60000);
+  }
+});

@@ -29,7 +29,7 @@ import { computeAllPlayerStats } from './player-stats-batch.js';
 import { getStatusBadges } from './leaderboard-display.js';
 import { createTimelineWithLabel, shownElapsed } from './match-timeline.js';
 import { loadSaved, save } from './match-restore.js';
-import { getActiveTournamentGame, clearActiveTournamentGame, completeTournamentMatch } from './tournament/tournament-ui.js';
+import { getActiveTournamentGame, setActiveTournamentGame, clearActiveTournamentGame, completeTournamentMatch, canStillPlay } from './tournament/tournament-ui.js';
 
 /**
  * Compute the emoji/badge diff between the current state and after adding a new match.
@@ -191,6 +191,7 @@ function getSeasonElo(playerName) {
 export function setupMatchForm() {
     submitMatchBtn.addEventListener("click", async (e) => {
         e.preventDefault();
+        await tournamentCheck; // a restored tournament game may turn out to be logged already
         const tA1 = teamA1Select.value.trim();
         const tA2 = teamA2Select.value.trim();
         const tB1 = teamB1Select.value.trim();
@@ -422,6 +423,7 @@ export function setupMatchForm() {
                     const tScore1 = teamsSwapped ? parsedGoalsA : parsedGoalsB;
                     await completeTournamentMatch(matchDocRef.id, tScore0, tScore1, winnerIndex);
                 }
+                clearActiveTournamentGame(); // also when the result could not be recorded
                 setPlayerSelectsLocked(false);
                 tournamentTeamMapping = null;
                 window.dispatchEvent(new Event('tournament-game-submitted'));
@@ -445,7 +447,7 @@ export function resetMatchForm() {
     teamA2Select.value = "";
     teamB1Select.value = "";
     teamB2Select.value = "";
-    save({ lineup: null });
+    save({ lineup: null, tournament: null });
     teamAgoalsInput.value = "0";
     teamBgoalsInput.value = "0";
     stopLiveMatchTimer(); // Also stop timer on reset
@@ -686,16 +688,13 @@ function showLiveUI(enabled) {
 }
 
 // --- Surviving reloads: mobile browsers may drop the tab while another app (e.g. Spotify) is open ---
-// Tournament games are not restored: their tournament context lives in memory only, and a restored
-// plain match would be logged without the tournament result.
-const savedLineup = () => (tournamentTeamMapping ? null : [teamA1Select, teamA2Select, teamB1Select, teamB2Select].map(getFilledRoleValue));
-const saveLive = () => save(tournamentTeamMapping ? { lineup: null, live: null }
-    : { lineup: savedLineup(), live: { startedAt: matchStartTime, goalLog } });
+const savedLineup = () => [teamA1Select, teamA2Select, teamB1Select, teamB2Select].map(getFilledRoleValue);
+const saveLive = () => save({ lineup: savedLineup(), live: { startedAt: matchStartTime, goalLog }, tournament: getActiveTournamentGame() });
 window.addEventListener('live-goal', () => { if (liveMode) saveLive(); });
 
 let restoreDone = false; // the lineup is only saved once the saved one was restored, so the page load can't wipe it
 window.addEventListener('lineup-changed', () => {
-    if (restoreDone) save({ lineup: savedLineup() });
+    if (restoreDone) save({ lineup: savedLineup(), tournament: getActiveTournamentGame() });
 });
 
 /** Silently restores today's lineup and live match (clock keeps running from the original start). */
@@ -722,6 +721,29 @@ function restoreSaved() {
         requestWakeLock();
         window.dispatchEvent(new CustomEvent('live-started', { detail: { resumed: true, goalLog: goalLog.slice() } }));
     }
+    if (saved?.tournament && !getActiveTournamentGame()) resumeTournamentGame(saved.tournament);
+}
+
+let tournamentCheck = null; // the server check of a restored tournament game; a submit waits for it
+
+/** A tournament game restored after a reload: banner, locked selects and side mapping now; the server
+ *  decides afterwards whether it is still playable (like the betting resume decides the live claim). */
+function resumeTournamentGame(game) {
+    if (!validateTournamentTeams(game, true)) return dropTournamentGame(); // a player was deleted meanwhile
+    setActiveTournamentGame(game);
+    setPlayerSelectsLocked(true);
+    showTournamentBanner(game.tournamentName, game.gameName);
+    tournamentCheck = canStillPlay(game).then((ok) => {
+        if (!ok && getActiveTournamentGame() === game) dropTournamentGame(); // not if cancelled/submitted/replaced meanwhile
+    });
+}
+
+/** The restored game was logged on another phone or its tournament is gone: back to how it was before this
+ *  restore existed (nothing restored), so the match cannot be logged twice or outside its tournament. */
+function dropTournamentGame() {
+    dropLiveMode();
+    cancelTournamentGame();
+    showToast('This tournament game was already played or removed meanwhile.', 'info');
 }
 // after the player dropdowns are filled (player-manager listens to the same event)
 window.addEventListener('players-updated', () => setTimeout(restoreSaved, 0));
@@ -1166,9 +1188,9 @@ function getTournamentWinnerIndex(matchWinner) {
 
 /**
  * Validate that current form players match the expected tournament teams.
- * Returns true if valid, false otherwise (shows a toast).
+ * Returns true if valid, false otherwise (shows a toast unless quiet).
  */
-function validateTournamentTeams(tournamentGame) {
+function validateTournamentTeams(tournamentGame, quiet = false) {
     if (!tournamentGame) return true;
     const { team0, team1 } = tournamentGame;
 
@@ -1196,7 +1218,7 @@ function validateTournamentTeams(tournamentGame) {
         return true;
     }
 
-    showToast('Teams do not match the tournament game. Please cancel and re-select the game.', 'error', 5000);
+    if (!quiet) showToast('Teams do not match the tournament game. Please cancel and re-select the game.', 'error', 5000);
     return false;
 }
 
@@ -1214,13 +1236,15 @@ function showTournamentBanner(tournamentName, gameName) {
     `;
     matchForm.insertBefore(tournamentBannerEl, matchForm.firstChild);
 
-    tournamentBannerEl.querySelector('#tournamentCancelBtn')?.addEventListener('click', () => {
-        clearActiveTournamentGame();
-        removeTournamentBanner();
-        setPlayerSelectsLocked(false);
-        tournamentTeamMapping = null;
-        resetMatchForm();
-    });
+    tournamentBannerEl.querySelector('#tournamentCancelBtn')?.addEventListener('click', cancelTournamentGame);
+}
+
+function cancelTournamentGame() {
+    clearActiveTournamentGame();
+    removeTournamentBanner();
+    setPlayerSelectsLocked(false);
+    tournamentTeamMapping = null;
+    resetMatchForm();
 }
 
 function removeTournamentBanner() {

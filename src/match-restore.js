@@ -5,7 +5,8 @@
 const KEY = 'kickelo.matchForm';
 const dayOf = (ms) => new Date(ms).toDateString();
 
-/** { lineup: [a1, a2, b1, b2] | null, live: { startedAt, goalLog } | null } saved today, else null. */
+/** { lineup: [a1, a2, b1, b2] | null, live: { startedAt, goalLog } | null,
+ *    tournament: the active tournament game (tournament-ui) | null } saved today, else null. */
 export function loadSaved(now = Date.now(), storage = globalThis.localStorage) {
   try {
     const saved = JSON.parse(storage.getItem(KEY));

@@ -33,6 +33,13 @@ export function getGameById(tournament, gameId) {
   return tournament.games.find(g => g.id === gameId) || null;
 }
 
+/** A game saved before a reload can still be played: tournament running, game ready, same teams.
+ *  (Team players are fixed after setup; an upstream result edit shows up as a different teamId.) */
+export function canResumeGame(tournament, { gameId, team0, team1 }) {
+  const game = tournament?.state === 'in_progress' ? getGameById(tournament, gameId) : null;
+  return game?.status === 'ready' && game.teams[0]?.teamId === team0?.teamId && game.teams[1]?.teamId === team1?.teamId;
+}
+
 /**
  * Get all games that are ready to be played (status='ready', not a bye).
  */

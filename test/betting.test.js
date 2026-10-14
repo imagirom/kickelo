@@ -469,6 +469,9 @@ console.log('\n=== live match survives a reload ===');
   assertEq(loadSaved(t + 2000, st).live.goalLog.length, 1, 'goal log restored');
   assertEq(loadSaved(new Date(2026, 9, 14, 23, 59).getTime(), st) !== null, true, 'kept until the end of the day (rain break)');
   assertEq(loadSaved(new Date(2026, 9, 15, 0, 1).getTime(), st), null, 'gone the next day');
+  save({ tournament: { gameId: 'r1-g1' }, lineup: ['A', 'B', 'C', 'D'] }, t + 3000, st);
+  save({ lineup: null, tournament: null }, t + 4000, st);
+  assertEq(loadSaved(t + 5000, st).tournament, null, 'cancel / submit clears the tournament game');
   assertEq(loadSaved(t, { getItem: () => '{bad json' }), null, 'corrupt storage -> nothing');
   assertEq(loadSaved(t, { getItem: () => { throw new Error('blocked'); } }), null, 'blocked storage -> nothing');
 

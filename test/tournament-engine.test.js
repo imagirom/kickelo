@@ -17,6 +17,7 @@ import {
   getDownstreamGames,
   hasCompletedDownstream,
   uncompleteGame,
+  canResumeGame,
 } from '../src/tournament/tournament-engine.js';
 
 import {
@@ -1006,6 +1007,32 @@ console.log('\n=== estimateGameCount — correctness and edge cases ===');
       assert(count >= 0, `estimateGameCount(${n}, '${fmt}') = ${count} ≥ 0`);
     }
   }
+}
+
+// ===========================================================================
+console.log('\n=== canResumeGame (tournament game restored after a reload) ===');
+// ===========================================================================
+
+{
+  const fresh = () => {
+    const teams = makeTeams(4);
+    const { games, defaultGameOrder } = generateSingleElimBracket(teams);
+    const t = makeTournament(teams, 'single_elim', games, defaultGameOrder);
+    initializeBracket(t);
+    return t;
+  };
+  const t = fresh();
+  const g = getReadyGames(t)[0];
+  const saved = { gameId: g.id, team0: { ...g.teams[0] }, team1: { ...g.teams[1] } };
+  assertEq(canResumeGame(t, saved), true, 'running, game ready, same teams -> resume');
+  assertEq(canResumeGame(t, { ...saved, gameId: 'nope' }), false, 'unknown game -> drop');
+  assertEq(canResumeGame(t, { ...saved, gameId: 'f' }), false, 'game not ready yet -> drop');
+  assertEq(canResumeGame(t, { ...saved, team1: { teamId: 'other' } }), false, 'other team in the slot (upstream edit) -> drop');
+  assertEq(canResumeGame(null, saved), false, 'tournament gone -> drop');
+  assertEq(canResumeGame({ ...t, state: 'deleted' }, saved), false, 'tournament deleted -> drop');
+  assertEq(canResumeGame({ ...t, state: 'completed' }, saved), false, 'tournament completed -> drop');
+  completeGame(t, g.id, 0, 'm1', [5, 3]);
+  assertEq(canResumeGame(t, saved), false, 'logged on another phone -> drop');
 }
 
 // ===========================================================================

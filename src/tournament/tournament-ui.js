@@ -4,12 +4,12 @@ import {
   initializeTournamentsData, getVisibleTournaments, getTournamentById,
   createTournament, addTeam, removeTeam, updateTeamName,
   updateTournamentConfig, lockTournament, submitTournamentGameResult,
-  generateNextSwissRound, softDeleteTournament, cloneTournament,
+  generateNextSwissRound, softDeleteTournament, cloneTournament, fetchTournament,
 } from './tournament-service.js';
 import {
   getReadyGames, getNextDefaultGame, getGameById,
   isSwissRoundComplete, getCurrentSwissRound, isTournamentComplete,
-  generateTeamName,
+  generateTeamName, canResumeGame,
 } from './tournament-engine.js';
 import { allMatches } from '../match-data-service.js';
 import { showToast, showConfirm } from '../toast.js';
@@ -53,6 +53,19 @@ export function initializeTournamentUI() {
  */
 export function getActiveTournamentGame() {
   return activeTournamentGame;
+}
+
+/** Puts back a game restored after a reload (match-form-handler restoreSaved). */
+export function setActiveTournamentGame(game) {
+  activeTournamentGame = game;
+}
+
+/** Whether a restored game can still be played, decided on the server's copy (not the cached first snapshot).
+ *  A failed fetch (offline) counts as yes: the submit checks again (completeTournamentMatch fetches). */
+export async function canStillPlay(game) {
+  let t;
+  try { t = await fetchTournament(game.tournamentId); } catch { return true; }
+  return canResumeGame(t, game);
 }
 
 /**
