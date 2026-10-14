@@ -27,7 +27,7 @@ import { showToast, showConfirm } from './toast.js';
 import { allMatches } from './match-data-service.js';
 import { computeAllPlayerStats } from './player-stats-batch.js';
 import { getStatusBadges } from './leaderboard-display.js';
-import { createTimelineWithLabel } from './match-timeline.js';
+import { createTimelineWithLabel, shownElapsed } from './match-timeline.js';
 import { getActiveTournamentGame, clearActiveTournamentGame, completeTournamentMatch } from './tournament/tournament-ui.js';
 
 /**
@@ -707,7 +707,7 @@ function startLiveMatchTimer() {
     function updateTimer() {
         if (!liveMode || !matchStartTime) return;
         const elapsed = Date.now() - matchStartTime;
-        timerElem.textContent = formatMsToMMSS(elapsed);
+        timerElem.textContent = formatMsToMMSS(shownElapsed(goalLog, elapsed));
     }
     updateTimer();
     liveTimerInterval = setInterval(updateTimer, 1000);

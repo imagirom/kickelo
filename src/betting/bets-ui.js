@@ -7,7 +7,7 @@ import { teamKey } from '../teams/team-identity.js';
 import { matchupKey, matchupPlayers } from './matchup.js';
 import { getTeamRecord } from '../teams/team-service.js';
 import { showConfirm, showToast } from '../toast.js';
-import { createTimelineSVG, formatMsToMMSS } from '../match-timeline.js';
+import { createTimelineSVG, formatMsToMMSS, shownElapsed } from '../match-timeline.js';
 import { BETTING, houseBetsActive } from './betting-config.js';
 import { describeOutcome, OUTCOME_TESTS, mmss } from './outcomes.js';
 import { isLockedIn, resolveHouseBet, resolveChallenge, dayKey } from './ledger.js';
@@ -46,13 +46,13 @@ function renderLive(cm) {
   const red = goals.filter((g) => g.team === 'red').length;
   const row = el('div', 'bets-live');
   const top = el('div', 'bets-live-top');
-  const timer = el('span', 'live-timer', formatMsToMMSS(Date.now() - startedMs));
+  const timer = el('span', 'live-timer', formatMsToMMSS(shownElapsed(goals, Date.now() - startedMs)));
   timer.dataset.startedMs = String(startedMs);
   top.append(el('span', 'bets-live-dot', '● LIVE'), timer, el('span', 'bets-live-score', `${red} : ${goals.length - red}`));
   row.appendChild(top);
   const tl = el('div', 'bets-timeline');
   tl.goals = goals;
-  drawTimeline(tl, Date.now() - startedMs);
+  drawTimeline(tl, shownElapsed(goals, Date.now() - startedMs));
   row.appendChild(tl);
   return row;
 }
@@ -278,6 +278,13 @@ function amounts(node, pairs) {
   pairs.forEach(([text, n], i) => node.append(i ? ` · ${text} ` : `${text} `, footballs(n)));
 }
 
+/** Keep an open sheet's balances and confirm guard current while bets or matches change elsewhere. */
+function refreshWhileOpen(update, pending) {
+  const events = ['bets-updated', 'matches-updated'];
+  for (const evt of events) window.addEventListener(evt, update);
+  pending.finally(() => { for (const evt of events) window.removeEventListener(evt, update); });
+}
+
 /** Disable the sheet's confirm button while someone can't cover their stake, and say who. */
 function guardBalance(sheet, info, short) {
   const okBtn = sheet.closest('.confirm-dialog')?.querySelector('.confirm-btn-ok');
@@ -376,6 +383,7 @@ async function openChallengeForm(cm) {
   sheet.append(grid, preview, info, lockNote);
   const pending = showConfirm('', { contentElement: sheet, confirmLabel: 'Post challenge', cancelLabel: 'Cancel' });
   update(); // the dialog exists now: label its confirm button
+  refreshWhileOpen(update, pending);
   const ok = await pending;
   if (!ok) return;
 
@@ -429,6 +437,7 @@ async function openAcceptSheet(bet) {
   sheet.append(field('Who accepts', acceptorSelect), info);
   const pending = showConfirm('', { contentElement: sheet, confirmLabel: 'Accept', cancelLabel: 'Cancel' });
   update(); // the dialog exists now: guard its confirm button
+  refreshWhileOpen(update, pending);
   const ok = await pending;
   if (!ok) return;
   const acceptor = acceptorSelect.value;
@@ -491,6 +500,7 @@ async function openBetSheet({ outcome, odds, title, matchupKey: key }) {
   sheet.append(field('Bettor', bettorSelect), chips, info);
   const pending = showConfirm('', { contentElement: sheet, confirmLabel: 'Place bet', cancelLabel: 'Cancel' });
   update(); // the dialog exists now: guard its confirm button
+  refreshWhileOpen(update, pending);
   const ok = await pending;
   if (!ok) return;
 
@@ -519,9 +529,9 @@ async function openBetSheet({ outcome, odds, title, matchupKey: key }) {
 function tickTimer() {
   const timer = document.querySelector('#betsContent .live-timer');
   if (!timer) return;
-  const elapsed = Date.now() - Number(timer.dataset.startedMs);
-  timer.textContent = formatMsToMMSS(elapsed);
   const tl = document.querySelector('#betsContent .bets-timeline');
+  const elapsed = shownElapsed(tl?.goals, Date.now() - Number(timer.dataset.startedMs));
+  timer.textContent = formatMsToMMSS(elapsed);
   if (tl) drawTimeline(tl, elapsed);
 }
 

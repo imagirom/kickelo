@@ -7,6 +7,7 @@ import { dayKey, firstGoalAt, resolveHouseBet, resolveChallenge, isLockedIn, com
 import { liveStartQuestion, shouldClearAfterSubmit, buildOffer, shouldPublishLineup, needsOverwriteConfirm, goalUpdate, isLiveTakeover, ownsLive, showNotSharedHint, liveClaimUpdate } from '../src/betting/current-match.js';
 import params from '../src/betting/model-params.json' with { type: 'json' };
 import { OUTCOME_TESTS, evaluateOutcome, describeOutcome } from '../src/betting/outcomes.js';
+import { shownElapsed } from '../src/match-timeline.js';
 import { candidateProps, eligible, drawProps, seededRandom } from '../src/betting/props.js';
 
 let passed = 0;
@@ -442,6 +443,17 @@ console.log('\n=== daily allowance: use it or lose it ===');
   const open = computeBalances([hb(day, 5)], [], day + 1000, pocket).get('Simon');
   assertEq([open.balance, open.allowanceToday], [0, 5], 'open bet: its stake is paid from today\'s allowance');
   assertEq(open.balance + A - open.allowanceToday, A - 5, 'spendable today = balance + unused allowance');
+}
+
+console.log('\n=== live clock stops at the deciding goal ===');
+{
+  const g = (team, timestamp) => ({ team, timestamp });
+  const fourFour = ['red', 'blue', 'red', 'blue', 'red', 'blue', 'red', 'blue'].map((t, i) => g(t, (i + 1) * 10000));
+  assertEq(shownElapsed(fourFour, 95000), 95000, 'undecided: the clock runs');
+  assertEq(shownElapsed([...fourFour, g('red', 90000)], 120000), 90000, '5:4: shows the deciding goal');
+  assertEq(shownElapsed([...fourFour, g('red', 90000), g('blue', 95000)], 120000), 90000, 'misclick 5:5: still the first team to 5');
+  assertEq(shownElapsed([...fourFour, g('blue', 95000)], 120000), 95000, 'misclicked goal deleted: the correct decider');
+  assertEq(shownElapsed(undefined, 5000), 5000, 'no goal log');
 }
 
 console.log('\n=== balances over many matches (indexed) ===');

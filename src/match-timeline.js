@@ -1,4 +1,15 @@
 // src/match-timeline.js
+import { MAX_GOALS } from './constants.js';
+
+/** Clock to show in live mode: stops at the deciding goal (first team to MAX_GOALS), otherwise runs.
+ *  The real clock keeps running, so deleting the deciding goal shows the right time again. */
+export function shownElapsed(goalLog, elapsedMs) {
+    const count = { red: 0, blue: 0 };
+    for (const goal of goalLog || []) {
+        if (++count[goal.team] === MAX_GOALS) return goal.timestamp;
+    }
+    return elapsedMs;
+}
 
 // Utility: format ms to mm:ss
 export function formatMsToMMSS(ms) {
