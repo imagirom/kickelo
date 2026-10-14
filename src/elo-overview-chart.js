@@ -14,6 +14,7 @@ const DIMMED_ALPHA = 0.12;
 const LINE_WIDTH = 2;
 const HIGHLIGHT_WIDTH = 3.2;
 const GOLDEN_GOAL_COLOR = '#ffd900c7';
+const GOLDEN_GOAL_DIMMED = 'rgba(255, 217, 0, 0.12)';
 
 // --- Persistent chart preferences ---
 const PREFS_KEY = 'kickelo_eloOverviewPrefs';
@@ -64,7 +65,8 @@ function buildChartData(smoothed) {
         const rawValues = [STARTING_ELO, ...trajectory.map(pt => pt.elo)];
         const span = Math.max(6, Math.min(14, Math.ceil(rawValues.length / 4)));
         const values = smoothed ? computeEMA(rawValues, span) : rawValues;
-        const data = [xs[0] - 1, ...xs].map((x, k) => ({ x, y: values[k] }));
+        // elo: the real rating, shown in the tooltip even when the line is smoothed
+        const data = [xs[0] - 1, ...xs].map((x, k) => ({ x, y: values[k], elo: rawValues[k] }));
         const pointRadius = [0, ...trajectory.map(pt => (pt.isGoldenGoalWin && !smoothed ? 1.5 : 0))];
 
         // Lookup for the "match" interaction mode: x -> data index of a match this player played
@@ -156,6 +158,7 @@ function applyHighlight() {
         ds.borderColor = ds._color(dim ? DIMMED_ALPHA : 1);
         ds.backgroundColor = ds.borderColor;
         ds.borderWidth = highlighted === i ? HIGHLIGHT_WIDTH : LINE_WIDTH;
+        ds.pointBackgroundColor = ds.pointBorderColor = dim ? GOLDEN_GOAL_DIMMED : GOLDEN_GOAL_COLOR;
     });
     chart.update('none');
 }
@@ -205,9 +208,14 @@ function render(container, emptyEl, prefs) {
                     min: xMin, max: xMax,
                     ticks: {
                         color: '#ccc', maxTicksLimit: 10, maxRotation: 0, precision: 0,
-                        callback: (value) => {
-                            const ts = timestamps[Math.round(value)];
-                            return ts === undefined ? '' : new Date(ts).toLocaleDateString();
+                        // short dates, each day once (many matches share a day)
+                        callback: (value, index, ticks) => {
+                            const day = (v) => {
+                                const ts = timestamps[Math.round(v)];
+                                return ts === undefined ? '' : new Date(ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+                            };
+                            const label = day(value);
+                            return index > 0 && day(ticks[index - 1].value) === label ? '' : label;
                         },
                     },
                     grid: { display: false },
@@ -228,12 +236,12 @@ function render(container, emptyEl, prefs) {
                     onLeave: () => setHighlight(null),
                 },
                 tooltip: {
-                    itemSort: (a, b) => b.parsed.y - a.parsed.y,
+                    itemSort: (a, b) => b.raw.elo - a.raw.elo,
                     callbacks: {
                         title: (items) => items.length && items[0].parsed.x > 0
                             ? new Date(timestamps[items[0].parsed.x]).toLocaleString()
                             : 'Season start',
-                        label: (item) => `${item.dataset.label}: ${Math.round(item.parsed.y)}`,
+                        label: (item) => `${item.dataset.label}: ${Math.round(item.raw.elo)}`,
                         labelColor: (item) => {
                             const color = item.dataset._color();
                             return { borderColor: color, backgroundColor: color };
