@@ -25,7 +25,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'npx firebase emulators:start --only firestore,auth --import=./firebase_emulator_cache',
+      command: 'npm run prepare:functions && npx firebase-tools emulators:start --only firestore,auth,functions --import=./firebase_emulator_cache',
       port: 7070,
       reuseExistingServer: true,
       timeout: 30000,
@@ -35,6 +35,13 @@ export default defineConfig({
       // makes Playwright also wait for the auth port, which the emulator above opens.
       command: 'node -e "setInterval(() => {}, 1 << 30)"',
       port: 9099,
+      reuseExistingServer: true,
+      timeout: 60000,
+    },
+    {
+      // Daily allowance choices are committed by the callable function.
+      command: 'node -e "setInterval(() => {}, 1 << 30)"',
+      port: 5001,
       reuseExistingServer: true,
       timeout: 60000,
     },

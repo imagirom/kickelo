@@ -212,3 +212,50 @@ Old clients must reload before placing another bet. Like the existing wallet,
 allowances are derived from bets and matches; editing or deleting a match can change
 the eligibility of its stakes. Matching stakes limits the small-stake allowance
 loophole; it does not prevent hedging opposite outcomes.
+
+
+## Optional fortune wheel
+
+The normal allowance remains the default. Before using it, a bettor can open
+**Try the fortune wheel instead** and explicitly choose **Spin instead**. The
+colorful wheel spins for about five seconds and reveals the saved result when it
+stops. Reduced-motion preferences shorten the animation. There is no demo or
+preview-spin control in the shipped UI.
+
+The ten equally likely segments for a 20-ball allowance are
+`0, 0, 0, 10, 10, 10, 20, 20, 30, 100` (mean 20). Smaller allowances scale the
+prizes; rounding is distributed across segments so the mean stays exact even for
+odd amounts. Scheduled loan repayment is reserved first, and only the remaining
+allowance is offered to the wheel. A zero result is final for that day. As with
+the normal allowance, rewards only enter the persistent balance on a qualifying
+betting day; unused rewards expire. Spinning without betting cannot accumulate
+free balances.
+
+`chooseAllowance` authenticates the shared-account user, calculates eligibility
+from the same ledger as the browser, draws with Node's cryptographic RNG, and
+commits one immutable `kind: 'allowance'` document per bettor/venue day. A retry,
+refresh, or another phone returns the same saved spin. Normal bets select the
+normal option before writing the wager; this locks out a later spin but does not
+itself grant any balls. Betting days consistently use Europe/Berlin on the server
+and clients. Existing stake affordability remains client-checked as elsewhere in
+the application; this change protects daily allowance selection and payouts.
+
+Deploy the callable function, rules, and frontend together. The function must be
+available before serving the new client. The predeploy hook packages the browser's
+pure ledger modules into `functions/generated/` (generated, not checked in):
+
+```sh
+npm ci
+npm --prefix functions ci
+npm run prepare:functions
+npm run build
+firebase deploy --only functions:chooseAllowance,firestore:rules,hosting
+```
+
+For local development, run `npm run prepare:functions`, then
+`firebase emulators:start --only firestore,auth,functions --import=./firebase_emulator_cache`
+and `npm run dev`. Functions use port 5001 by default. Alternate local ports can be
+set through `VITE_FIRESTORE_PORT`, `VITE_AUTH_PORT`, and `VITE_FUNCTIONS_PORT`.
+The focused server check is `npm run test:wheel:emulator` (optional `AUTH_PORT`,
+`FIRESTORE_PORT`, `FUNCTIONS_PORT` overrides). It checks concurrent requests,
+choice finality, and denied client changes using only local test records.

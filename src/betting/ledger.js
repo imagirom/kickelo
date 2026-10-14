@@ -5,10 +5,13 @@ import { BETTING } from './betting-config.js';
 import { matchupKey, matchupPlayers } from './matchup.js';
 import { evaluateOutcome } from './outcomes.js';
 
+// One venue day across browsers and the server (including daylight-saving time).
+const venueDate = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit',
+});
 export function dayKey(ms) {
-  const d = new Date(ms);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
+  const parts = Object.fromEntries(venueDate.formatToParts(new Date(ms)).map(p => [p.type, p.value]));
+  return Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day));
 }
 
 export function firstGoalAt(match) {
@@ -113,7 +116,10 @@ function computeLedger(bets, matches, now, cfg) {
   const index = indexByMatchup(matches);
   for (const bet of bets) {
     if (bet.void) continue;
-    if (bet.kind === 'credit') {
+    if (bet.kind === 'allowance') {
+      book(wallets, days, bet.bettor, bet.placedAt, 0, 0, false, today, 'allowance', 2);
+      days.get(bet.bettor).get(dayKey(bet.placedAt)).choice = bet;
+    } else if (bet.kind === 'credit') {
       // An advance is money, not a stake or a fresh allowance.
       book(wallets, days, bet.bettor, bet.placedAt, 0, bet.advance, false, today, 'credit', 2);
       const activity = days.get(bet.bettor).get(dayKey(bet.placedAt));
@@ -138,12 +144,13 @@ function computeLedger(bets, matches, now, cfg) {
     let creditedToday = false;
     let todayAmount = cfg.dailyAllowance;
     for (const [day, entry] of [...activity].sort(([a], [b]) => a - b)) {
-      const amount = entry.legacy ? cfg.dailyAllowance
+      const wheel = entry.choice?.mode === 'wheel' ? entry.choice : null;
+      const amount = wheel ? wheel.allowance : entry.legacy ? cfg.dailyAllowance
         : Math.min(cfg.dailyAllowance, previousStake ?? cfg.dailyAllowance);
       const active = entry.legacy || entry.stake > 0;
-      const repayment = Math.min(debt, Math.floor(amount / 2));
+      const repayment = Math.min(debt, wheel ? wheel.repayment : Math.floor(amount / 2));
       if (active) {
-        wallets.get(player).balance += amount - repayment;
+        wallets.get(player).balance += wheel ? wheel.payout : amount - repayment;
         debt -= repayment;
         if (day === today) wallets.get(player).todayDelta -= repayment;
       }
@@ -157,10 +164,10 @@ function computeLedger(bets, matches, now, cfg) {
       // Skip empty/refunded days when finding the previous active day.
       if (day < today && entry.stake > 0) previousStake = entry.stake;
     }
-    if (!creditedToday) todayAmount = Math.min(cfg.dailyAllowance, previousStake ?? cfg.dailyAllowance);
+    if (!creditedToday && activity.get(today)?.choice?.mode !== 'wheel') todayAmount = Math.min(cfg.dailyAllowance, previousStake ?? cfg.dailyAllowance);
     if (!creditedToday) todayRepayment = Math.min(debt - (activity.get(today)?.borrowed || 0), Math.floor(todayAmount / 2));
     if (debt) wallets.get(player).debt = debt;
-    allowances.set(player, { amount: todayAmount, credited: creditedToday, repayment: todayRepayment });
+    allowances.set(player, { amount: todayAmount, credited: creditedToday, repayment: todayRepayment, choice: activity.get(today)?.choice });
   }
   return { wallets, allowances };
 }
@@ -174,11 +181,13 @@ export function walletAvailable(player, bets, matches, now, cfg = BETTING) {
   const { wallets, allowances } = computeLedger(bets, matches, now, cfg);
   const allowance = allowances.get(player) || { amount: cfg.dailyAllowance, credited: false, repayment: 0 };
   return {
-    balance: (wallets.get(player)?.balance ?? 0) + (allowance.credited ? 0 : allowance.amount - allowance.repayment),
+    balance: (wallets.get(player)?.balance ?? 0) + (allowance.credited ? 0
+      : allowance.choice?.mode === 'wheel' ? allowance.choice.payout : allowance.amount - allowance.repayment),
     allowance: allowance.amount,
     allowanceCredited: allowance.credited,
     repayment: allowance.repayment,
     debt: wallets.get(player)?.debt || 0,
+    choice: allowance.choice,
   };
 }
 

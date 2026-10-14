@@ -88,3 +88,6 @@ firebase_emulator_cache_backup/
 
 # Build output
 dist/
+
+# Local emulator port overrides
+firebase.*.local.json

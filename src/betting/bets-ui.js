@@ -1,3 +1,4 @@
+import { createAllowanceWheel } from './wheel-ui.js';
 // src/betting/bets-ui.js
 // Bets box under the match form: shared match header, live view for spectators,
 // house winner odds, place-bet sheet and today's bet feed for this matchup.
@@ -13,7 +14,7 @@ import { BETTING, houseBetsActive } from './betting-config.js';
 import { describeOutcome, OUTCOME_TESTS, mmss } from './outcomes.js';
 import { isLockedIn, resolveHouseBet, resolveChallenge, dayKey } from './ledger.js';
 import { getCurrentMatch } from './current-match-service.js';
-import { getBets, placeHouseBet, undoBet, available, allowanceStatus, placeChallenge, acceptChallenge, withdrawChallenge, creditStatus, borrowFootballs } from './bets-service.js';
+import { getBets, placeHouseBet, undoBet, available, allowanceStatus, placeChallenge, acceptChallenge, withdrawChallenge, creditStatus, borrowFootballs, chooseAllowance } from './bets-service.js';
 import { footballs, GF_ICON_SRC } from './currency.js';
 import { isLiveOnThisDevice } from './sync-controller.js';
 
@@ -547,6 +548,7 @@ async function openBetSheet({ outcome, odds, title, matchupKey: key }) {
   });
   const info = el('div', 'bet-sheet-info');
   const allowance = el('p', 'bet-sheet-allowance');
+  const wheel = createAllowanceWheel({ choose: chooseAllowance, changed: update });
   function update() {
     const stake = Number(stakeInput.value) || 0;
     for (const [btn, chip] of chipButtons) {
@@ -555,36 +557,48 @@ async function openBetSheet({ outcome, odds, title, matchupKey: key }) {
     }
     const wallet = bettorSelect.value ? allowanceStatus(bettorSelect.value) : null;
     const balance = wallet?.balance ?? 0;
-    allowance.textContent = wallet
+    wheel.update(wallet, bettorSelect.value, borrowing);
+    bettorSelect.disabled = wheel.busy || borrowing;
+    allowance.textContent = wallet?.choice?.mode === 'wheel'
+      ? `Today's wheel: ${wallet.choice.payout} golden footballs, replacing the normal allowance.${wallet.repayment ? ` Loan repayment: ${wallet.repayment}.` : ''} Next time: your total stakes today, up to ${BETTING.dailyAllowance}.`
+      : wallet
       ? `Today's allowance: ${wallet.allowance} golden football${wallet.allowance === 1 ? '' : 's'} (${wallet.allowanceCredited ? 'already included' : 'included when you bet'}).${wallet.repayment || wallet.debt ? ` ${wallet.repayment} ${wallet.allowanceCredited ? 'repaid' : 'go toward'} your loan, leaving ${wallet.allowance - wallet.repayment}.` : ''} Next time: your total stakes today, up to ${BETTING.dailyAllowance}. Refunded bets do not count.`
       : `Start with ${BETTING.dailyAllowance} golden footballs. Later allowances match your stakes on the previous active day, up to ${BETTING.dailyAllowance}.`;
     const creditState = creditStatus(bettorSelect.value);
     credit.hidden = !bettorSelect.value || (balance > 0 && !creditState.debt);
     borrow.hidden = !creditState.canBorrow && !borrowing;
-    borrow.disabled = borrowing || !creditState.canBorrow;
+    borrow.disabled = borrowing || wheel.busy || !creditState.canBorrow;
     creditHeading.textContent = balance <= 0 ? 'No golden footballs left' : 'Advance received';
     creditNote.textContent = creditState.debt
       ? `${creditState.debt} golden football${creditState.debt === 1 ? '' : 's'} still owed. Repay up to half of each future active-day allowance, rounded down. No extra fees; another advance is available only after repayment.`
       : creditState.canBorrow
         ? `Get ${BETTING.credit.advance} balls now. Repay ${BETTING.credit.repayment} in total, using up to half of each future active-day allowance, rounded down. No extra fees on the remaining debt.`
         : 'You have already used today’s advance. You can borrow again after the daily credit limit resets.';
-    allIn.disabled = !bettorSelect.value || balance < 1;
+    allIn.disabled = wheel.busy || !bettorSelect.value || balance < 1;
+    stakeInput.disabled = wheel.busy;
+    for (const [btn] of chipButtons) btn.disabled = wheel.busy;
     allIn.title = balance > BETTING.maxStake ? `Maximum stake: ${BETTING.maxStake}` : 'Stake all available golden footballs';
     amounts(info, [['Payout:', Math.round(stake * odds)], ['Balance:', balance]]);
-    guardBalance(sheet, info, bettorSelect.value && stake > balance ? [bettorSelect.value] : []);
+    if (wheel.busy) {
+      info.textContent = 'Your wheel result will appear when it stops.';
+      allowance.textContent = '';
+      credit.hidden = true;
+    }
+    guardBalance(sheet, info, !wheel.busy && bettorSelect.value && stake > balance ? [bettorSelect.value] : []);
     const confirm = sheet.closest('.confirm-dialog')?.querySelector('.confirm-btn-ok');
-    if (confirm) confirm.disabled = borrowing || !bettorSelect.value || !Number.isInteger(stake) || stake < 1 || stake > balance;
+    if (confirm) confirm.disabled = wheel.busy || borrowing || !bettorSelect.value || !Number.isInteger(stake) || stake < 1 || stake > balance;
   }
   stakeInput.addEventListener('input', update);
   bettorSelect.addEventListener('change', update);
   update();
 
-  sheet.append(field('Bettor', bettorSelect), credit, chips, info, allowance);
+  sheet.append(field('Bettor', bettorSelect), credit, chips, info, allowance, wheel.element);
   const pending = showConfirm('', { contentElement: sheet, confirmLabel: 'Place bet', cancelLabel: 'Cancel' });
   update(); // the dialog exists now: guard its confirm button
   window.addEventListener('bets-updated', update);
   window.addEventListener('matches-updated', update);
   const ok = await pending;
+  wheel.dispose();
   window.removeEventListener('bets-updated', update);
   window.removeEventListener('matches-updated', update);
   if (!ok) return;

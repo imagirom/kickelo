@@ -170,6 +170,8 @@ service cloud.firestore {
     }
 
     // --- Rules for the 'bets' collection (golden-football betting) ---
+    // kind:'allowance' records are readable with the ledger but have no client
+    // create/update/delete grant: only chooseAllowance can select a daily result.
     match /bets/{betId} {
       function currentMatch() {
         return get(/databases/$(database)/documents/meta/currentMatch).data;

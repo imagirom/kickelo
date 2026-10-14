@@ -128,3 +128,6 @@ exports.notifyOnMatchCreate = onDocumentCreated('matches/{matchId}', async (even
 
     return null;
   });
+
+// Optional daily allowance wheel. Results are drawn and persisted server-side.
+exports.chooseAllowance = require('./allowance-wheel').chooseAllowance;

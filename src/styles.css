@@ -2499,3 +2499,31 @@ body.paused > *:not(#pauseOverlay) {
 .challenge-lock-note { font-style: italic; }
 .confirm-btn-ok:disabled { opacity: 0.5; cursor: default; }
 .bet-sheet-short { color: var(--accent-red); }
+
+/* Optional allowance wheel: a compact arcade cabinet inside the bet sheet. */
+.allowance-wheel { margin-top: 10px; border: 1px solid #67608c; border-radius: 12px; background: #191a2b; overflow: hidden; }
+.allowance-wheel[hidden] { display: none; }
+.wheel-summary { cursor: pointer; padding: 13px 15px; color: #f5d77e; font-weight: 650; font-size: .95rem; }
+.wheel-panel { text-align: center; padding: 6px 16px 18px; background: radial-gradient(ellipse at 50% 40%, #3e315b 0%, #1c1c30 65%); }
+.wheel-eyebrow { color: #d8b56a; font-size: .64rem; letter-spacing: .19em; margin-top: 4px; }
+.wheel-heading { margin: 7px 0; color: #fff1cd; font-size: 1.6rem; letter-spacing: -.035em; }
+.wheel-description { font-size: .8rem; color: #d8d4e7; line-height: 1.5; margin: 8px auto 16px; max-width: 330px; }
+.wheel-stage { width: min(100%, 310px); margin: 0 auto; position: relative; padding-top: 8px; }
+.wheel-ring { position: relative; border-radius: 50%; padding: 11px; background: repeating-conic-gradient(#ffe8a4 0deg 3deg, #6f5024 3deg 12deg); box-shadow: 0 0 0 3px #b98742, 0 0 0 6px #352943, 0 12px 28px #080b1c99; }
+.wheel-rotor { border-radius: 50%; overflow: hidden; background: #171d35; will-change: transform; }
+.wheel-rotor svg { display: block; width: 100%; height: auto; }
+.wheel-number { font: 800 25px system-ui, sans-serif; fill: #192239; paint-order: stroke; }
+.wheel-hub { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; color: #fff1be; font-size: 31px; background: radial-gradient(circle at 30% 25%, #74609d, #231c38 75%); border: 4px solid #e1b868; box-shadow: 0 3px 8px #0009; }
+.wheel-pointer { position: absolute; z-index: 2; width: 25px; height: 34px; top: -1px; left: 50%; transform: translateX(-50%); clip-path: polygon(0 0, 100% 0, 50% 100%); background: linear-gradient(90deg, #f1b94d, #fff0ba 50%, #f1b94d); filter: drop-shadow(0 2px 1px #000); transform-origin: 50% 0; }
+.wheel-result { min-height: 2.8em; display: grid; place-content: center; margin: 13px 0 6px; color: #fff2c5; font-weight: 700; font-size: 1rem; line-height: 1.35; }
+.wheel-spin { width: 100%; min-height: 46px; border: 1px solid #fff0ba; border-radius: 8px; background: linear-gradient(#ffe29a, #e5ae4b); color: #292036; font-weight: 800; font-size: 1rem; box-shadow: 0 4px 0 #8d622b; cursor: pointer; }
+.wheel-spin:disabled { opacity: .55; cursor: default; }
+.wheel-spin[hidden] { display: none; }
+.wheel-fine-print { color: #b8b1ca; font-size: .72rem; line-height: 1.5; margin: 13px 0 0; }
+.is-spinning .wheel-pointer { animation: wheel-tick .16s ease-in-out infinite alternate; }
+.is-spinning .wheel-ring { animation: wheel-lights .45s ease-in-out infinite alternate; }
+.wheel-revealed .wheel-result { animation: wheel-pop .45s ease-out; }
+@keyframes wheel-tick { to { transform: translateX(-50%) rotate(-12deg); } }
+@keyframes wheel-lights { to { box-shadow: 0 0 0 3px #ffe6a4, 0 0 18px 4px #ffd46866, 0 12px 28px #080b1c99; } }
+@keyframes wheel-pop { from { transform: scale(.85); opacity: .2; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .is-spinning .wheel-pointer, .is-spinning .wheel-ring, .wheel-revealed .wheel-result { animation: none; } }

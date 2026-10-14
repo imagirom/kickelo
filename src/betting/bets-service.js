@@ -1,6 +1,6 @@
 // src/betting/bets-service.js
 // Real-time 'bets' collection + placing/undoing house bets.
-import { db, collection, doc, addDoc, updateDoc, onSnapshot, serverTimestamp, runTransaction, getDoc } from '../firebase-service.js';
+import { db, functions, httpsCallable, collection, doc, addDoc, updateDoc, onSnapshot, serverTimestamp, runTransaction, getDoc } from '../firebase-service.js';
 import { allMatches } from '../match-data-service.js';
 import { BETTING } from './betting-config.js';
 import { computeBalances, checkBet, resolveHouseBet, resolveChallenge, walletAvailable, acceptDecision, deniedChallengeReason, spendable, creditId, canBorrow } from './ledger.js';
@@ -54,6 +54,14 @@ export function allowanceStatus(bettor) {
   return walletAvailable(bettor, allBets, allMatches || [], Date.now());
 }
 
+// Normal choice only locks out the wheel; the normal grant still requires a bet.
+export async function chooseAllowance(bettor, mode = 'normal') {
+  const { data } = await httpsCallable(functions, 'chooseAllowance')({ bettor, mode });
+  allBets = [...allBets.filter(b => b.id !== data.id), data];
+  window.dispatchEvent(new CustomEvent('bets-updated'));
+  return data;
+}
+
 export function creditStatus(bettor) {
   return { canBorrow: canBorrow(bettor, allBets, allMatches || [], Date.now()),
     debt: getBalances().get(bettor)?.debt || 0 };
@@ -103,6 +111,7 @@ export async function placeHouseBet({ bettor, stake, outcome, expectedOdds, matc
   const verdict = checkBet(bet, { currentMatch: cm });
   if (!verdict.ok) throw new Error(verdict.reason);
   if (stake > BETTING.maxStake) throw new Error('too-much');
+  await chooseAllowance(bettor);
   if (stake > available(bettor)) throw new Error('insufficient');
   try {
     const ref = await addDoc(collection(db, 'bets'), { ...bet, placedAt: serverTimestamp() });
@@ -144,6 +153,8 @@ export async function placeChallenge({ challenger, opponent, outcome, challenger
   const verdict = checkBet(bet, { currentMatch: cm });
   if (!verdict.ok) throw new Error(verdict.reason);
   if (Math.max(challengerStake, opponentStake) > BETTING.maxStake) throw new Error('too-much');
+  await chooseAllowance(challenger);
+  if (bet.opponent) await chooseAllowance(bet.opponent);
   if (challengerStake > available(challenger)) throw new Error('insufficient');
   // A named opponent is locked in straight away (no accept step), so their stake is checked now too.
   if (bet.opponent && opponentStake > available(bet.opponent)) throw new Error(`insufficient:${bet.opponent}`);
@@ -154,6 +165,7 @@ export async function placeChallenge({ challenger, opponent, outcome, challenger
 }
 
 export async function acceptChallenge(id, acceptor) {
+  await chooseAllowance(acceptor);
   const local = allBets.find((b) => b.id === id);
   if (local && local.opponentStake > available(acceptor)) throw new Error('insufficient');
   const ref = doc(db, 'bets', id);

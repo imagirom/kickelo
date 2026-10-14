@@ -16,7 +16,9 @@
     "test:e2e": "npx playwright test",
     "test": "npm run test:stats && npm run test:cache && npm run test:edit && npm run test:tournament && npm run test:audio && npm run test:teams && npm run test:devmenu && npm run test:betting",
     "test:devmenu": "node test/dev-menu.test.js",
-    "test:betting": "node test/betting.test.js && node --test test/betting-improvements.test.js test/betting-allowance.test.js"
+    "test:betting": "node test/betting.test.js && node --test test/betting-improvements.test.js test/betting-allowance.test.js test/allowance-wheel.test.js",
+    "prepare:functions": "node scripts/prepare-betting-functions.mjs",
+    "test:wheel:emulator": "node test/wheel-emulator.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
