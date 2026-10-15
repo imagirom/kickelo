@@ -1,4 +1,4 @@
-import { MAX_GOALS, STARTING_ELO, INACTIVE_THRESHOLD_DAYS, BADGE_THRESHOLDS, CAKE_TEAM, TOURNAMENT_BADGE_DURATION_DAYS } from "./constants.js";
+import { MAX_GOALS, STARTING_ELO, INACTIVE_THRESHOLD_DAYS, BADGE_THRESHOLDS, BADGE_INFO, CAKE_TEAM, TOURNAMENT_BADGE_DURATION_DAYS } from "./constants.js";
 import { expectedScore, updateRating } from "./elo-service.js";
 import { computeTournamentMedals } from "./tournament/tournament-engine.js";
 import { rate as rateOpenSkill, rating as createOpenSkillRating, ordinal as openskillOrdinal } from "openskill";
@@ -9,6 +9,38 @@ const MEDIC_MIN_TEAMMATE_LOSS_STREAK = BADGE_THRESHOLDS?.medic?.teammateLossStre
 const ROLLERCOASTER_MIN_LEAD_CHANGES = BADGE_THRESHOLDS?.rollercoaster?.minLeadChanges ?? 3;
 
 const FAST_WIN_THRESHOLD_MS = 2.5 * 60 * 1000; // 2 minutes 30 seconds
+const MEDAL_EMOJIS = { gold: '🥇', silver: '🥈', bronze: '🥉', participant: '⚽' };
+
+// Local midnight of each badge's introducedAt: awards before it are not tallied.
+const BADGE_INTRODUCED_MS = Object.fromEntries(Object.entries(BADGE_INFO).map(([emoji, { introducedAt }]) => {
+    const [y, m, d] = introducedAt.split('-').map(Number);
+    return [emoji, new Date(y, m - 1, d).getTime()];
+}));
+
+/**
+ * Adds an award to a player's emoji tally (stats.emojiTally[emoji] = { count, firstAt, lastAt, maxLength? }).
+ * amount: points or levels to add; length: streak length reached (streak badges only).
+ */
+function awardEmoji(playerStats, emoji, timestamp, amount = 1, length) {
+    if (!(amount > 0) || !(timestamp >= BADGE_INTRODUCED_MS[emoji])) return;
+    const entry = playerStats.emojiTally[emoji] ??= { count: 0, firstAt: timestamp, lastAt: timestamp };
+    entry.count += amount;
+    entry.firstAt = Math.min(entry.firstAt, timestamp);
+    entry.lastAt = Math.max(entry.lastAt, timestamp);
+    if (length !== undefined) entry.maxLength = Math.max(entry.maxLength || 0, length);
+}
+
+/** Awards a streak badge for the level just reached, if it is at least the badge's minLength. */
+function awardStreakLevel(playerStats, emoji, timestamp, length) {
+    if (length >= BADGE_INFO[emoji].minLength) awardEmoji(playerStats, emoji, timestamp, 1, length);
+}
+
+/** Awards a per-day badge at most once per day (dayKey). */
+function awardDaily(playerStats, emoji, dayKey) {
+    if (playerStats._lastAwardDay[emoji] === dayKey) return;
+    playerStats._lastAwardDay[emoji] = dayKey;
+    awardEmoji(playerStats, emoji, dayKey);
+}
 
 function getDayKey(timestamp) {
     const day = new Date(timestamp);
@@ -104,7 +136,10 @@ export function computeAllPlayerStats(matches, options = {}) {
             _wallStreak: 0,
             wallStreak: 0,
             tournamentBadges: { gold: 0, silver: 0, bronze: 0, participant: 0 },
+            // Every badge earned in the matches passed in (the season), unlike statusEvents (today only)
+            emojiTally: {},
         };
+        stats[playerName]._lastAwardDay = {};
         stats[playerName]._medicEvents = [];
         stats[playerName]._weekdayActivityDays = new Set();
         stats[playerName]._goldenPhiCurrent = 0;
@@ -121,6 +156,7 @@ export function computeAllPlayerStats(matches, options = {}) {
     console.log(`Computing stats for ${players.length} players over ${matches.length} matches..`);
 
     const teamEloMap = new Map();
+    let seasonRecordElo = STARTING_ELO + 100; // 👑 needs a record above this
 
     // Process all matches in reverse order (oldest to most recent)
     for (let i = matches.length - 1; i >= 0; i--) {
@@ -204,6 +240,17 @@ export function computeAllPlayerStats(matches, options = {}) {
         const winnerOppStreakCount = match.winner === 'A' ? streakBreaksAgainstA : streakBreaksAgainstB;
         const hattrickA = hasGoalLog ? detectHattrick(match.goalLog, 'red') : false;
         const hattrickB = hasGoalLog ? detectHattrick(match.goalLog, 'blue') : false;
+        // Badges every winner of this match earns: [emoji, statusEvents key, amount]
+        const winnerEvents = [
+            ['🌊', 'extinguisherCount', winnerOppStreakCount],
+            ['🐕', 'underdogPointSum', underdogPoints],
+            ['🪃', 'comebackGoalSum', comebackDeficit >= 2 ? comebackDeficit : 0],
+            ['📄', 'shutoutCount', isShutoutWin ? 1 : 0],
+            ['☕', 'fastWinCount', isFastMatch ? 1 : 0],
+            ['🎢', 'rollercoasterCount', isRollercoasterWin ? 1 : 0],
+            ['🐧', 'chillComebackCount', isChillComebackWin ? 1 : 0],
+            ['🎩', 'hattrickCount', (match.winner === 'A' ? hattrickA : hattrickB) ? 1 : 0],
+        ];
 
         // Only update role-based Elo if positions are confirmed
         const includeRoleBasedElo = match.positionsConfirmed == true;
@@ -245,6 +292,9 @@ export function computeAllPlayerStats(matches, options = {}) {
                     const teammateMeta = playerMeta[teammateId];
                     if (teammateMeta?.streakType === 'loss' && (teammateMeta.streakLength || 0) >= MEDIC_MIN_TEAMMATE_LOSS_STREAK) {
                         s._medicEvents.push({ timestamp: match.timestamp, teammateId });
+                        if (computeMedicUniqueCount(s._medicEvents, MEDIC_LOOKBACK_MS, match.timestamp) >= BADGE_THRESHOLDS.medic.minUniqueTeammates) {
+                            awardDaily(s, '🩹', dayKey);
+                        }
                     }
                 }
             }
@@ -253,7 +303,14 @@ export function computeAllPlayerStats(matches, options = {}) {
             const oppAvgElo = isTeamA ? teamBAvgElo : teamAAvgElo;
             const isGoldenGoalWin = playerWasWinner && teamGoals === MAX_GOALS && oppGoals === MAX_GOALS - 1;
             s.eloTrajectory.push({ elo: Math.round(currentElo), timestamp: match.timestamp, oppAvgElo: Math.round(oppAvgElo), isGoldenGoalWin });
-            if (Math.round(currentElo) > s.highestElo) s.highestElo = Math.round(currentElo);
+            if (Math.round(currentElo) > s.highestElo) {
+                s.highestElo = Math.round(currentElo);
+                if (s.highestElo > STARTING_ELO) awardDaily(s, '⛰', dayKey);
+            }
+            if (Math.round(currentElo) > seasonRecordElo) {
+                seasonRecordElo = Math.round(currentElo);
+                awardDaily(s, '👑', dayKey);
+            }
 
             const perMatchDelta = playerWasWinner ? eloDelta : -eloDelta;
             s.dailyDeltas[dayKey] = (s.dailyDeltas[dayKey] || 0) + perMatchDelta;
@@ -293,6 +350,7 @@ export function computeAllPlayerStats(matches, options = {}) {
             if (playerWasWinner && teamGoals === MAX_GOALS && oppGoals === MAX_GOALS - 1) {
                 s._goldenPhiCurrent = (s._goldenPhiCurrent || 0) + 1;
                 if (s._goldenPhiCurrent > s._goldenPhiLongest) s._goldenPhiLongest = s._goldenPhiCurrent;
+                awardStreakLevel(s, 'φ', match.timestamp, s._goldenPhiCurrent);
             } else if (!playerWasWinner && teamGoals === MAX_GOALS - 1 && oppGoals === MAX_GOALS) {
                 s._goldenPhiCurrent = 0;
             }
@@ -336,6 +394,7 @@ export function computeAllPlayerStats(matches, options = {}) {
                 s.streakLength = 1;
             }
             s.currentStreak = { type: s.streakType, length: s.streakLength };
+            if (result === 'win') awardStreakLevel(s, '🔥', match.timestamp, s.streakLength);
 
             const previousAltResult = playerMeta[playerId]?.lastAlternatingResult;
             const previousAltLength = playerMeta[playerId]?.alternatingRunLength || 0;
@@ -347,6 +406,7 @@ export function computeAllPlayerStats(matches, options = {}) {
                 s.alternatingRunLength = 1;
             }
             s.lastAlternatingResult = result;
+            awardStreakLevel(s, '🐍', match.timestamp, s.alternatingRunLength);
             
             // Longest streaks
             if (result === 'win') {
@@ -360,15 +420,12 @@ export function computeAllPlayerStats(matches, options = {}) {
             }
             s.longestStreaks = { longestWinStreak: s.longestWinStreak, longestLossStreak: s.longestLossStreak };
             
-            if (matchIsToday && playerWasWinner) {
-                if (winnerOppStreakCount > 0) s.statusEvents.extinguisherCount += winnerOppStreakCount;
-                if (underdogPoints > 0) s.statusEvents.underdogPointSum += underdogPoints;
-                if (comebackDeficit >= 2) s.statusEvents.comebackGoalSum += comebackDeficit;
-                if (isShutoutWin) s.statusEvents.shutoutCount += 1;
-                if (isFastMatch) s.statusEvents.fastWinCount += 1;
-                if (isRollercoasterWin) s.statusEvents.rollercoasterCount += 1;
-                if (isChillComebackWin) s.statusEvents.chillComebackCount += 1;
-                if (team === 'A' ? hattrickA : hattrickB) s.statusEvents.hattrickCount += 1;
+            if (playerWasWinner) {
+                for (const [emoji, key, amount] of winnerEvents) {
+                    if (amount <= 0) continue;
+                    if (matchIsToday) s.statusEvents[key] += amount;
+                    awardEmoji(s, emoji, match.timestamp, amount);
+                }
             }
 
             // Wall badge: track consecutive defense games conceding 0 or 1 goals
@@ -377,6 +434,7 @@ export function computeAllPlayerStats(matches, options = {}) {
                 if (isDefense) {
                     if (oppGoals <= 1) {
                         s._wallStreak++;
+                        awardStreakLevel(s, '🧱', match.timestamp, s._wallStreak);
                     } else {
                         s._wallStreak = 0;
                     }
@@ -391,13 +449,15 @@ export function computeAllPlayerStats(matches, options = {}) {
         }
 
         // Cake: if CAKE_TEAM players are on the same winning team today, everyone gets cake
-        if (matchIsToday && CAKE_TEAM.length === 2) {
+        if (CAKE_TEAM.length === 2) {
             const winningTeam = match.winner === 'A' ? match.teamA : match.teamB;
             if (CAKE_TEAM.every(p => winningTeam.includes(p))) {
                 const waitingPlayers = match.pairingMetadata?.waitingPlayers || [];
                 const allActivePlayers = [...match.teamA, ...match.teamB, ...waitingPlayers];
                 for (const playerId of allActivePlayers) {
-                    if (stats[playerId]) stats[playerId].statusEvents.cakeCount += 1;
+                    if (!stats[playerId]) continue;
+                    if (matchIsToday) stats[playerId].statusEvents.cakeCount += 1;
+                    awardEmoji(stats[playerId], '🎂', match.timestamp);
                 }
             }
         }
@@ -413,6 +473,19 @@ export function computeAllPlayerStats(matches, options = {}) {
         });
         for (const [player, counts] of Object.entries(medals)) {
             if (stats[player]) stats[player].tournamentBadges = counts;
+        }
+        // Emoji tally: every tournament completed in the season, one award per placement.
+        for (const tournament of options.tournaments) {
+            const placements = computeTournamentMedals([tournament], {
+                since: season?.start?.getTime() ?? 0,
+                until: season?.end?.getTime() ?? Infinity,
+            });
+            for (const [player, counts] of Object.entries(placements)) {
+                if (!stats[player]) continue;
+                for (const [kind, emoji] of Object.entries(MEDAL_EMOJIS)) {
+                    awardEmoji(stats[player], emoji, tournament.completedAt, counts[kind]);
+                }
+            }
         }
     }
 
@@ -451,6 +524,13 @@ export function computeAllPlayerStats(matches, options = {}) {
             }
         }
         s.currentPositiveDayRun = positiveRun;
+
+        // 🐦‍🔥: every played day that won back more than the previous played day lost
+        for (let idx = 1; idx < dailyEntries.length; idx++) {
+            const { day, delta } = dailyEntries[idx];
+            const previousDelta = dailyEntries[idx - 1].delta;
+            if (delta > 0 && previousDelta < 0 && delta > Math.abs(previousDelta)) awardEmoji(s, '🐦‍🔥', day);
+        }
 
         let phoenix = { isActive: false, recoveredAmount: 0 };
         if (dailyEntries.length >= 2) {
@@ -503,10 +583,11 @@ export function computeAllPlayerStats(matches, options = {}) {
 
         // Longest consecutive positive day run (ever)
         let longestRun = 0, currentRun = 0;
-        for (const { delta } of dailyEntries) {
+        for (const { day, delta } of dailyEntries) {
             if (delta > 0) {
                 currentRun++;
                 if (currentRun > longestRun) longestRun = currentRun;
+                awardStreakLevel(s, '🧗', day, currentRun);
             } else {
                 currentRun = 0;
             }
@@ -539,6 +620,7 @@ export function computeAllPlayerStats(matches, options = {}) {
         delete s._goldenPhiLongest;
         delete s._openskillState;
         delete s._wallStreak;
+        delete s._lastAwardDay;
     }
     let globalHighestElo = STARTING_ELO;
     for (const playerName of players) {
@@ -868,9 +950,9 @@ function detectHattrick(goalLog, teamColor) {
     return false;
 }
 
-function computeMedicUniqueCount(events, lookbackMs) {
+function computeMedicUniqueCount(events, lookbackMs, now = Date.now()) {
     if (!Array.isArray(events) || events.length === 0) return 0;
-    const cutoff = Date.now() - lookbackMs;
+    const cutoff = now - lookbackMs;
     const uniqueTeammates = new Set();
     for (const event of events) {
         if (!event) continue;

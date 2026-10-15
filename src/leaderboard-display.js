@@ -3,7 +3,7 @@ import { allPlayers} from './player-data-service.js';
 import { leaderboardList } from './dom-elements.js';
 import { getCachedStats, getAllCachedStats, getAllTeamEloStats } from './stats-cache-service.js';
 import { getSeasons, getSelectedSeason, setSelectedSeason } from './season-service.js';
-import { STARTING_ELO, BADGE_THRESHOLDS } from './constants.js';
+import { STARTING_ELO, BADGE_THRESHOLDS, BADGE_INFO } from './constants.js';
 import { getTeamRecord } from './teams/team-service.js';
 import { openTeamEditModal } from './teams/team-edit-modal.js';
 import { isDevMode } from './dev-menu.js';
@@ -304,7 +304,6 @@ export function getStatusBadges(stats) {
     const currentElo = getCurrentElo(stats);
     const medicConfig = BADGE_THRESHOLDS?.medic ?? {};
     const gardenerConfig = BADGE_THRESHOLDS?.gardener ?? {};
-    const goldenConfig = BADGE_THRESHOLDS?.goldenPhi ?? {};
     const formatBadge = (emoji, value, threshold) => {
         const badge = { emoji };
         const includeValue = typeof value === 'number' && (
@@ -351,13 +350,13 @@ export function getStatusBadges(stats) {
         badges.push(formatBadge('🎂', events.cakeCount, 1));
     }
 
-    if (stats.currentAlternatingRun && stats.currentAlternatingRun >= 7) {
-        badges.push(formatBadge('🐍', stats.currentAlternatingRun, 7));
+    if (stats.currentAlternatingRun && stats.currentAlternatingRun >= BADGE_INFO['🐍'].minLength) {
+        badges.push(formatBadge('🐍', stats.currentAlternatingRun, BADGE_INFO['🐍'].minLength));
     }
     if (stats.phoenix?.isActive) {
         badges.push({emoji: '🐦‍🔥'});
     }
-    if (stats.currentPositiveDayRun && stats.currentPositiveDayRun >= 3) {
+    if (stats.currentPositiveDayRun && stats.currentPositiveDayRun >= BADGE_INFO['🧗'].minLength) {
         badges.push(formatBadge('🧗', stats.currentPositiveDayRun, 0));
     }
     if (stats.highestElo && currentElo === stats.highestElo && stats.highestElo > STARTING_ELO) {
@@ -366,7 +365,7 @@ export function getStatusBadges(stats) {
     if (stats.isAllTimeEloRecordHolder && stats.highestElo && currentElo === stats.highestElo && stats.highestElo > STARTING_ELO + 100) {
         badges.push(formatBadge('👑'));
     }
-    if (stats.currentStreak && stats.currentStreak.type === 'win' && stats.currentStreak.length >= 3) {
+    if (stats.currentStreak && stats.currentStreak.type === 'win' && stats.currentStreak.length >= BADGE_INFO['🔥'].minLength) {
         badges.push(formatBadge('🔥', stats.currentStreak.length, 0));
     }
 
@@ -381,12 +380,12 @@ export function getStatusBadges(stats) {
     // }
 
     const goldenPhi = stats.goldenPhiStreak || 0;
-    if (goldenPhi >= goldenConfig.minWins) {
+    if (goldenPhi >= BADGE_INFO['φ'].minLength) {
         badges.push(formatBadge('φ', goldenPhi, 0));
     }
 
     const wallStreak = stats.wallStreak || 0;
-    if (wallStreak >= 3) {
+    if (wallStreak >= BADGE_INFO['🧱'].minLength) {
         badges.push(formatBadge('🧱', wallStreak, 0));
     }
 
@@ -592,6 +591,8 @@ async function updateLeaderboardDisplay() {
                 statusBadges.forEach((badge) => {
                     const badgeSpan = document.createElement('span');
                     badgeSpan.classList.add('leaderboard-badge');
+                    const info = BADGE_INFO[badge.emoji];
+                    if (info) badgeSpan.title = `${info.name}: ${info.rule}`;
                     const emojiSpan = document.createElement('span');
                     emojiSpan.textContent = badge.emoji;
                     if (badge.emojiColor) {

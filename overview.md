@@ -36,6 +36,7 @@ The app is production‑ready, with real‑time Firestore updates, a modular ES�
 - **Role‑based Elo:** Offense/defense Elo only updates when positions are confirmed.
 - **Ranked matches:** Matches can be flagged as ranked/unranked.
 - **Tournaments:** Structured competitions with 5 formats (single/double elimination, Swiss, round robin, double round robin). Includes bracket visualization, automatic winner cascading, match editing with cascade support, and final rankings. Elo seeding uses all-time ratings; medal badges (🥇🥈🥉⚽) are derived from completed tournaments' `finalRankings` (`computeTournamentMedals`), so the completion date decides the season.
+- **Status emojis:** Leaderboard badges registered in `BADGE_INFO` (`src/constants.js`); a per-season tally of every badge earned (`emojiTally`) feeds the player page's emoji collection and the main page's Emoji Stats. Rules and counting: `status-emojis.md`.
 - **Pause days:** Configurable date list to pause the app with an overlay.
 - **Pairing suggestions:** Session‑aware 2v2 suggestions using recency + waiting‑karma weighting.
 
@@ -84,6 +85,7 @@ The app is production‑ready, with real‑time Firestore updates, a modular ES�
 - `src/player-stats-component.js`: Player modal with charts and tables.
 - `src/match-timeline.js`: SVG timeline rendering for goal logs.
 - `src/elo-overview-chart.js`: "ELO Graph" chart of all visible players (follows season + inactive filter).
+- `src/emoji-stats-display.js`: "Emoji Stats" section (rarest-first list + player × emoji table, same filters); `src/emoji-stats.js`: tally summaries + player page emoji collection.
 
 ### Tournaments
 - `src/tournament/tournament-engine.js`: Pure-function DAG engine — game completion, winner cascading, rankings, validation.
@@ -94,7 +96,7 @@ The app is production‑ready, with real‑time Firestore updates, a modular ES�
 ### Data & Analytics
 - `src/firebase-service.js`: Firebase init + persistence, emulator hooks (commented).
 - `src/player-data-service.js`, `src/match-data-service.js`: Real‑time listeners + cache updates.
-- `src/player-stats-batch.js`: Single‑pass stats engine (Elo/OpenSkill, badges, streaks).
+- `src/player-stats-batch.js`: Single‑pass stats engine (Elo/OpenSkill, badges, streaks, emoji tally).
 - `src/stats-cache-service.js`: Cached stats store with update events.
 - `src/pairing-service.js`: 2v2 suggestion engine + waiting‑karma logic.
 - `src/season-service.js`: Season selection and K‑factor override.
