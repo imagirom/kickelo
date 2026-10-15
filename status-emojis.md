@@ -19,6 +19,7 @@ the leaderboard and the tally.
 | 🧱 | Wall | streak | Concede ≤1 goal as defender (confirmed positions, 2v2) in 3+ games in a row | streak length | 2026-03-17 |
 | φ | Golden streak | streak | `goldenPhi.minWins` (5) 5:4 wins without a 4:5 loss in between | streak length | 2025-11-23 |
 | 🧗 | Climber | streak | Positive net Elo on 3+ consecutive played days | days | 2025-11-19 |
+| 🪴 | Gardener | streak | A match on 5+ consecutive weekdays (`gardener.requiredWeekdays`; weekends skipped, a weekday without a match yet does not break it until it is over) | weekdays | 2026-10-15 |
 | ⛰ | Summit | state | Currently at a personal Elo peak above 1500 | – | 2025-11-19 |
 | 👑 | Record holder | state | Holds the highest Elo reached in the season (above 1600) and is at it | – | 2025-11-19 |
 | 🐦‍🔥 | Phoenix | state | Today's Elo gain > |loss on the previous played day| | – | 2025-11-19 |
@@ -27,10 +28,16 @@ the leaderboard and the tally.
 | 🐕 | Underdog | points | Win against a team ≥100 Elo higher (team averages); `floor(diff/100)` points | points today | 2025-11-19 |
 | 🪃 | Boomerang | points | Win after trailing by ≥2 goals; points = biggest deficit erased | points today | 2025-11-19 |
 | 📄 | Clean sheet | event | Win 5:0 | count today | 2025-11-19 |
-| 🎩 | Hat trick | event | Win with 3 goals in a row within 40 s | count today | 2026-03-20 |
+| 🎩 | Hat trick | event | Win with 3 goals in a row within 30 s (`hattrick.windowMs`; 40 s until 2026-10-15) | count today | 2026-03-20 |
 | ☕ | Coffee break | event | Win a match lasting ≤ 2:30 | count today | 2025-11-23 |
 | 🎢 | Rollercoaster | event | Win a match with ≥3 lead changes | count today | 2025-11-23 |
 | 🐧 | Chill comeback | event | Win 5:4 after trailing the whole match | count today | 2025-11-23 |
+| 🧟 | Match-point survivor | event | Win 5:4 after the opponents reached 4 goals while you had ≤2 (goal log); earned alongside 🪃 | count today | 2026-10-15 |
+| 🏓 | Ping-pong | event | Win 5:4 with the score never more than 1 apart (goal log); a game that is also a 🎢 earns only 🎢 | count today | 2026-10-15 |
+| 🧊 | Ice-cold decider | event | Win 5:4 where the 4:4 lasted ≥ 120 s before the winning goal (`iceCold.minTiedMs`, goal log) | count today | 2026-10-15 |
+| 🐢 | Marathon | event | Win a match lasting ≥ 8 min (last goal of the goal log, else `matchDuration`); > 20 min is ignored as a forgotten timer (`marathon`) | count today | 2026-10-15 |
+| ⏳ | Patience | event | First win after sitting out ≥ 2 matches in a row on the same day (`patience.minSatOut`) | count today | 2026-10-15 |
+| 🏖️ | Welcome back | event | First win after ≥ 14 calendar days without playing any match (`welcomeBack.minDaysAway`) | count today | 2026-10-15 |
 | 🎂 | Cake | event | `CAKE_TEAM` wins together: everyone playing or waiting gets cake | count today | 2026-03-20 |
 | 🥇🥈🥉⚽ | Tournament medals | medal | Placement in a completed tournament (⚽ = played, no podium) | medals in the last 7 days | 2026-04-10 |
 
@@ -38,9 +45,23 @@ Event and points badges are shown on the leaderboard for the rest of the day the
 (`stats.statusEvents`, today only). State and streak badges are shown while the condition holds.
 Medals are shown for `TOURNAMENT_BADGE_DURATION_DAYS` after the tournament completed.
 
-Not in the registry yet: 🪴 Gardener (matches on 5+ consecutive weekdays, `gardenerWeekdayStreak`) is
-computed but commented out in `getStatusBadges`. When it is enabled, add it to `BADGE_INFO` as a
-streak badge (introducedAt = the day it goes live) and award its levels in the tally.
+Thresholds live in `BADGE_THRESHOLDS` (`src/constants.js`); the rule sentences are built from them.
+Rates on the 2026 matches up to 2026-10-07 (990 with goal log, 2019 player wins): 🧟 47 matches,
+🏓 50 (15 of them also 🎢), 🧊 15 (1.5%; at 60 s it would be 6–9%), 🐢 ≈ 5% (≈ 1–2% at 9 min),
+⏳ 125 wins (6%; at 3 sat out it would be 0.5%), 🏖️ 65 wins.
+
+Data the newer badges rely on:
+
+- 🧟 🏓 🧊 need a goal log that adds up to the 5:4 result (`getNarrowWinScoreline`); manual entries never
+  earn them.
+- ⏳ "Sat out" means listed in `pairingMetadata.waitingPlayers`: the active players of the last Suggest
+  (within 30 min, see `buildPairingMetadata` in `src/match-form-handler.js`) who are not playing. That
+  list is on 97% of the 2026 matches; a match without it neither extends nor breaks a run, and a player
+  who is there but not among the Suggest session's active players is not known to be waiting.
+  Runs restart every day. "First win": a loss after the wait keeps it pending until the next win that day.
+- 🏖️ uses the all-time last match (any season, unranked too): `computeAllPlayerStats` takes
+  `options.allMatches`; without it, only the matches passed in are known. Players without an earlier
+  match never earn it.
 
 ### How introducedAt was derived
 
@@ -71,9 +92,9 @@ Counting rules:
 
 - **event**: +1 per match it was earned in.
 - **points** (🌊 🐕 🪃): + the points that match added (the number the leaderboard shows).
-- **streak** (🔥 🐍 🧱 φ 🧗): +1 for every level reached from minLength on — a 5-win streak counts
+- **streak** (🔥 🐍 🧱 φ 🧗 🪴): +1 for every level reached from minLength on — a 5-win streak counts
   3 (for being awarded the 3, 4 and 5 win streaks). `maxLength` is the longest streak reached.
-  🧗 is dated by day.
+  🧗 and 🪴 are dated by day.
 - **state**, counted once per day on which it was newly earned (`firstAt`/`lastAt` are local midnights):
   - ⛰: days on which the player set a new personal Elo peak above 1500.
   - 👑: days on which the player set a new season Elo record above 1600.

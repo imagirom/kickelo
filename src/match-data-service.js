@@ -106,8 +106,8 @@ export function resetMatchDataListener() {
 
 export function refreshSeasonStats(season = getSelectedSeason()) {
     const seasonMatches = filterMatchesBySeason(allMatches, season);
-    // Tournaments feed the medal badges (derived from their finalRankings).
-    updateStatsCache(filterRankedMatches(seasonMatches), { season, tournaments: getVisibleTournaments() });
+    // Tournaments feed the medal badges (derived from their finalRankings); all matches feed ⏳ and 🏖.
+    updateStatsCache(filterRankedMatches(seasonMatches), { season, tournaments: getVisibleTournaments(), allMatches });
 }
 
 // Medals change only when a tournament completes, is re-completed after an edit, or is deleted/restored:

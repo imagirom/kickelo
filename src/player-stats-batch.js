@@ -9,6 +9,7 @@ const MEDIC_MIN_TEAMMATE_LOSS_STREAK = BADGE_THRESHOLDS?.medic?.teammateLossStre
 const ROLLERCOASTER_MIN_LEAD_CHANGES = BADGE_THRESHOLDS?.rollercoaster?.minLeadChanges ?? 3;
 
 const FAST_WIN_THRESHOLD_MS = 2.5 * 60 * 1000; // 2 minutes 30 seconds
+const ZOMBIE_MAX_OWN_GOALS = 2; // 🧟: own goals at most when the opponents reached match point
 const MEDAL_EMOJIS = { gold: '🥇', silver: '🥈', bronze: '🥉', participant: '⚽' };
 
 // Local midnight of each badge's introducedAt: awards before it are not tallied.
@@ -118,6 +119,12 @@ export function computeAllPlayerStats(matches, options = {}) {
                 rollercoasterCount: 0,
                 chillComebackCount: 0,
                 hattrickCount: 0,
+                zombieCount: 0,
+                pingPongCount: 0,
+                iceColdCount: 0,
+                marathonCount: 0,
+                patienceCount: 0,
+                welcomeBackCount: 0,
                 cakeCount: 0
             },
             dailyDeltas: {},
@@ -154,6 +161,12 @@ export function computeAllPlayerStats(matches, options = {}) {
     }
 
     console.log(`Computing stats for ${players.length} players over ${matches.length} matches..`);
+
+    // ⏳ and 🏖️ depend on matches outside the season too (presence, last played): options.allMatches
+    // (newest first, unranked included) when the caller has them.
+    const presenceMatches = options.allMatches ?? matches;
+    const patienceWins = computePatienceWins(presenceMatches);
+    const welcomeBackWins = computeWelcomeBackWins(presenceMatches);
 
     const teamEloMap = new Map();
     let seasonRecordElo = STARTING_ELO + 100; // 👑 needs a record above this
@@ -240,6 +253,10 @@ export function computeAllPlayerStats(matches, options = {}) {
         const winnerOppStreakCount = match.winner === 'A' ? streakBreaksAgainstA : streakBreaksAgainstB;
         const hattrickA = hasGoalLog ? detectHattrick(match.goalLog, 'red') : false;
         const hattrickB = hasGoalLog ? detectHattrick(match.goalLog, 'blue') : false;
+        const narrowWin = getNarrowWinScoreline(match);
+        const isMarathonWin = typeof matchDurationMs === 'number'
+            && matchDurationMs >= BADGE_THRESHOLDS.marathon.minDurationMs
+            && matchDurationMs <= BADGE_THRESHOLDS.marathon.maxDurationMs;
         // Badges every winner of this match earns: [emoji, statusEvents key, amount]
         const winnerEvents = [
             ['🌊', 'extinguisherCount', winnerOppStreakCount],
@@ -250,6 +267,11 @@ export function computeAllPlayerStats(matches, options = {}) {
             ['🎢', 'rollercoasterCount', isRollercoasterWin ? 1 : 0],
             ['🐧', 'chillComebackCount', isChillComebackWin ? 1 : 0],
             ['🎩', 'hattrickCount', (match.winner === 'A' ? hattrickA : hattrickB) ? 1 : 0],
+            ['🧟', 'zombieCount', isZombieWin(narrowWin) ? 1 : 0],
+            // A ping-pong game that is also a rollercoaster only earns 🎢
+            ['🏓', 'pingPongCount', isPingPongWin(narrowWin) && !isRollercoasterWin ? 1 : 0],
+            ['🧊', 'iceColdCount', isIceColdWin(narrowWin) ? 1 : 0],
+            ['🐢', 'marathonCount', isMarathonWin ? 1 : 0],
         ];
 
         // Only update role-based Elo if positions are confirmed
@@ -426,6 +448,12 @@ export function computeAllPlayerStats(matches, options = {}) {
                     if (matchIsToday) s.statusEvents[key] += amount;
                     awardEmoji(s, emoji, match.timestamp, amount);
                 }
+                // Per-player wins: ⏳ (sat out before) and 🏖️ (back after a break)
+                for (const [emoji, key, winsByMatch] of [['⏳', 'patienceCount', patienceWins], ['🏖️', 'welcomeBackCount', welcomeBackWins]]) {
+                    if (!winsByMatch.get(match)?.has(playerId)) continue;
+                    if (matchIsToday) s.statusEvents[key] += 1;
+                    awardEmoji(s, emoji, match.timestamp);
+                }
             }
 
             // Wall badge: track consecutive defense games conceding 0 or 1 goals
@@ -578,6 +606,13 @@ export function computeAllPlayerStats(matches, options = {}) {
         s.isActive = s.lastPlayed && s.lastPlayed >= activityCutoff;
     s.medicTeammatesHelped = computeMedicUniqueCount(s._medicEvents, MEDIC_LOOKBACK_MS);
     s.gardenerWeekdayStreak = computeWeekdayActivityStreak(s._weekdayActivityDays);
+        // 🪴 tally: every level of every run of consecutive weekdays (weekends skipped)
+        let weekdayRun = 0, previousWeekdayKey = null;
+        for (const day of [...s._weekdayActivityDays].sort((a, b) => a - b)) {
+            weekdayRun = getPreviousWeekday(day)?.getTime() === previousWeekdayKey ? weekdayRun + 1 : 1;
+            previousWeekdayKey = day;
+            awardStreakLevel(s, '🪴', day, weekdayRun);
+        }
     s.goldenPhiStreak = s._goldenPhiCurrent || 0;
     s.longestGoldenPhiStreak = s._goldenPhiLongest || 0;
 
@@ -934,7 +969,116 @@ function detectChillComeback(match, goalLog) {
     return true;
 }
 
-const HATTRICK_WINDOW_MS = 40 * 1000;
+/**
+ * Score after each goal from the winner's view ({ own, opp, timestamp }) for a 5:4 win whose goal log
+ * adds up to 5:4; null otherwise. Feeds 🧟 🏓 🧊.
+ */
+export function getNarrowWinScoreline(match) {
+    if (!match || !Array.isArray(match.goalLog) || match.goalLog.length === 0) return null;
+    const winnerColor = match.winner === 'A' ? 'red' : match.winner === 'B' ? 'blue' : null;
+    const winningGoals = match.winner === 'A' ? match.goalsA : match.goalsB;
+    const losingGoals = match.winner === 'A' ? match.goalsB : match.goalsA;
+    if (!winnerColor || winningGoals !== MAX_GOALS || losingGoals !== MAX_GOALS - 1) return null;
+    let own = 0;
+    let opp = 0;
+    const scoreline = match.goalLog
+        .filter(goal => goal.team === 'red' || goal.team === 'blue')
+        .map(goal => {
+            if (goal.team === winnerColor) own++;
+            else opp++;
+            return { own, opp, timestamp: goal.timestamp };
+        });
+    return own === MAX_GOALS && opp === MAX_GOALS - 1 ? scoreline : null;
+}
+
+/** 🧟: the opponents reached match point (4) while the winners had at most 2. */
+export function isZombieWin(scoreline) {
+    return !!scoreline?.some(({ own, opp }) => opp === MAX_GOALS - 1 && own <= ZOMBIE_MAX_OWN_GOALS);
+}
+
+/** 🏓: the score was never more than one goal apart. */
+export function isPingPongWin(scoreline) {
+    return !!scoreline?.every(({ own, opp }) => Math.abs(own - opp) <= 1);
+}
+
+/** 🧊: the 4:4 lasted at least BADGE_THRESHOLDS.iceCold.minTiedMs before the winning goal. */
+export function isIceColdWin(scoreline) {
+    if (!scoreline || scoreline.length < 2) return false;
+    const tie = scoreline[scoreline.length - 2];
+    const winningGoal = scoreline[scoreline.length - 1];
+    return tie.own === MAX_GOALS - 1 && tie.opp === MAX_GOALS - 1
+        && winningGoal.timestamp - tie.timestamp >= BADGE_THRESHOLDS.iceCold.minTiedMs;
+}
+
+function addPlayerWin(winsByMatch, match, playerId) {
+    if (!winsByMatch.has(match)) winsByMatch.set(match, new Set());
+    winsByMatch.get(match).add(playerId);
+}
+
+function isPlayableMatch(match) {
+    return match && !match.deleted && Array.isArray(match.teamA) && Array.isArray(match.teamB);
+}
+
+/**
+ * ⏳: a player's first win after sitting out minSatOut+ matches in a row on the same day.
+ * "Sat out" = listed in match.pairingMetadata.waitingPlayers (recorded when the lineup came from or
+ * near a Suggest); matches without that list neither extend nor break a run.
+ * @param {Array<Object>} matches - newest first
+ * @returns {Map<Object, Set<string>>} match -> players who earned it there
+ */
+export function computePatienceWins(matches, minSatOut = BADGE_THRESHOLDS.patience.minSatOut) {
+    const wins = new Map();
+    let currentDay = null;
+    let satOut = {};
+    let waited = new Set();
+    for (let i = matches.length - 1; i >= 0; i--) {
+        const match = matches[i];
+        if (!isPlayableMatch(match)) continue;
+        const dayKey = getDayKey(match.timestamp);
+        if (dayKey !== currentDay) {
+            currentDay = dayKey;
+            satOut = {};
+            waited = new Set();
+        }
+        const winners = match.winner === 'A' ? match.teamA : match.winner === 'B' ? match.teamB : [];
+        for (const playerId of [...match.teamA, ...match.teamB]) {
+            if ((satOut[playerId] || 0) >= minSatOut) waited.add(playerId);
+            satOut[playerId] = 0;
+            if (winners.includes(playerId) && waited.delete(playerId)) addPlayerWin(wins, match, playerId);
+        }
+        for (const playerId of match.pairingMetadata?.waitingPlayers || []) {
+            satOut[playerId] = (satOut[playerId] || 0) + 1;
+        }
+    }
+    return wins;
+}
+
+/**
+ * 🏖️: a player's first win after minDaysAway+ calendar days without playing any match.
+ * Players without an earlier match do not qualify.
+ * @param {Array<Object>} matches - newest first; pass all matches (any season, unranked too)
+ * @returns {Map<Object, Set<string>>} match -> players who earned it there
+ */
+export function computeWelcomeBackWins(matches, minDaysAway = BADGE_THRESHOLDS.welcomeBack.minDaysAway) {
+    const wins = new Map();
+    const lastPlayedDay = {};
+    const away = new Set();
+    for (let i = matches.length - 1; i >= 0; i--) {
+        const match = matches[i];
+        if (!isPlayableMatch(match)) continue;
+        const dayKey = getDayKey(match.timestamp);
+        const winners = match.winner === 'A' ? match.teamA : match.winner === 'B' ? match.teamB : [];
+        for (const playerId of [...match.teamA, ...match.teamB]) {
+            // Math.round: a day across a DST switch is 23 or 25 hours
+            if (Math.round((dayKey - lastPlayedDay[playerId]) / MILLIS_PER_DAY) >= minDaysAway) away.add(playerId);
+            lastPlayedDay[playerId] = dayKey;
+            if (winners.includes(playerId) && away.delete(playerId)) addPlayerWin(wins, match, playerId);
+        }
+    }
+    return wins;
+}
+
+const HATTRICK_WINDOW_MS = BADGE_THRESHOLDS.hattrick.windowMs;
 
 function detectHattrick(goalLog, teamColor) {
     if (!Array.isArray(goalLog) || goalLog.length < 3) return false;
@@ -998,6 +1142,11 @@ function computeWeekdayActivityStreak(daySet) {
     if (!daySet || daySet.size === 0) return 0;
     let cursor = alignToMostRecentWeekday();
     if (!cursor) return 0;
+    // A weekday without a match yet does not break the streak until it is over
+    if (!daySet.has(cursor.getTime()) && cursor.getTime() === getDayKey(Date.now())) {
+        cursor = getPreviousWeekday(cursor);
+        if (!cursor) return 0;
+    }
     let streak = 0;
     let guard = daySet.size + 10;
     while (cursor && guard > 0) {

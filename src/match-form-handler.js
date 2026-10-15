@@ -60,7 +60,7 @@ function buildEmojiDiffElement(playerNames, teamA, teamB, winner, goalsA, goalsB
 
         // Prepend synthetic match (matches are sorted newest-first)
         const matchesWithNew = [syntheticMatch, ...seasonMatches];
-        const newStatsResult = computeAllPlayerStats(matchesWithNew, { season, tournaments: getVisibleTournaments() });
+        const newStatsResult = computeAllPlayerStats(matchesWithNew, { season, tournaments: getVisibleTournaments(), allMatches: [syntheticMatch, ...allMatches] });
 
         // Build badge diff for each player
         const diffs = [];

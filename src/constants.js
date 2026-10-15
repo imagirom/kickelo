@@ -33,6 +33,22 @@ export const BADGE_THRESHOLDS = Object.freeze({
 	goldenPhi: {
 		minWins: 5,
 	},
+	hattrick: {
+		windowMs: 30 * 1000, // 3 goals in a row within this window
+	},
+	iceCold: {
+		minTiedMs: 120 * 1000, // how long the 4:4 must last before the winning goal
+	},
+	marathon: {
+		minDurationMs: 8 * 60 * 1000,
+		maxDurationMs: 20 * 60 * 1000, // longer matches are treated as forgotten timers
+	},
+	patience: {
+		minSatOut: 2, // matches sat out in a row (same day) before the win
+	},
+	welcomeBack: {
+		minDaysAway: 14,
+	},
 });
 
 
@@ -54,6 +70,7 @@ export const BADGE_INFO = Object.freeze({
 	'🧱': { name: 'Wall', kind: 'streak', minLength: 3, introducedAt: '2026-03-17', rule: 'Concede at most one goal as defender in 3 or more games in a row.' },
 	'φ': { name: 'Golden streak', kind: 'streak', minLength: BADGE_THRESHOLDS.goldenPhi.minWins, introducedAt: '2025-11-23', rule: `Win 5:4 ${BADGE_THRESHOLDS.goldenPhi.minWins} times without a 4:5 loss in between.` },
 	'🧗': { name: 'Climber', kind: 'streak', minLength: 3, introducedAt: '2025-11-19', rule: 'Gain Elo on 3 or more played days in a row.' },
+	'🪴': { name: 'Gardener', kind: 'streak', minLength: BADGE_THRESHOLDS.gardener.requiredWeekdays, introducedAt: '2026-10-15', rule: `Play on ${BADGE_THRESHOLDS.gardener.requiredWeekdays} or more weekdays in a row (weekends are skipped).` },
 	'⛰': { name: 'Summit', kind: 'state', introducedAt: '2025-11-19', rule: 'Reach a new personal Elo peak above the starting Elo.' },
 	'👑': { name: 'Record holder', kind: 'state', introducedAt: '2025-11-19', rule: 'Set the highest Elo anyone has reached in the season (above 1600).' },
 	'🐦‍🔥': { name: 'Phoenix', kind: 'state', introducedAt: '2025-11-19', rule: 'Win back more Elo in a day than you lost on your previous played day.' },
@@ -62,10 +79,16 @@ export const BADGE_INFO = Object.freeze({
 	'🐕': { name: 'Underdog', kind: 'points', introducedAt: '2025-11-19', rule: 'Win against a team rated 100+ Elo higher. One point per 100 Elo.' },
 	'🪃': { name: 'Boomerang', kind: 'points', introducedAt: '2025-11-19', rule: 'Win after trailing by 2+ goals. Points = the biggest deficit erased.' },
 	'📄': { name: 'Clean sheet', kind: 'event', introducedAt: '2025-11-19', rule: 'Win 5:0.' },
-	'🎩': { name: 'Hat trick', kind: 'event', introducedAt: '2026-03-20', rule: 'Win with 3 goals in a row within 40 seconds.' },
+	'🎩': { name: 'Hat trick', kind: 'event', introducedAt: '2026-03-20', rule: `Win with 3 goals in a row within ${BADGE_THRESHOLDS.hattrick.windowMs / 1000} seconds.` },
 	'☕': { name: 'Coffee break', kind: 'event', introducedAt: '2025-11-23', rule: 'Win a match that took 2:30 minutes or less.' },
 	'🎢': { name: 'Rollercoaster', kind: 'event', introducedAt: '2025-11-23', rule: `Win a match in which the lead changed ${BADGE_THRESHOLDS.rollercoaster.minLeadChanges}+ times.` },
 	'🐧': { name: 'Chill comeback', kind: 'event', introducedAt: '2025-11-23', rule: 'Win 5:4 after trailing the whole match.' },
+	'🧟': { name: 'Match-point survivor', kind: 'event', introducedAt: '2026-10-15', rule: 'Win 5:4 after the opponents reached 4 goals while you had 2 or fewer.' },
+	'🏓': { name: 'Ping-pong', kind: 'event', introducedAt: '2026-10-15', rule: 'Win 5:4 without either team ever leading by more than one goal (a rollercoaster win counts as 🎢 instead).' },
+	'🧊': { name: 'Ice-cold decider', kind: 'event', introducedAt: '2026-10-15', rule: `Win 5:4 after the 4:4 lasted ${BADGE_THRESHOLDS.iceCold.minTiedMs / 60000} minutes or longer.` },
+	'🐢': { name: 'Marathon', kind: 'event', introducedAt: '2026-10-15', rule: `Win a match that took ${BADGE_THRESHOLDS.marathon.minDurationMs / 60000} minutes or longer.` },
+	'⏳': { name: 'Patience', kind: 'event', introducedAt: '2026-10-15', rule: `Your first win after sitting out ${BADGE_THRESHOLDS.patience.minSatOut} or more matches in a row on the same day.` },
+	'🏖️': { name: 'Welcome back', kind: 'event', introducedAt: '2026-10-15', rule: `Your first win after ${BADGE_THRESHOLDS.welcomeBack.minDaysAway} or more days without playing.` },
 	'🎂': { name: 'Cake', kind: 'event', introducedAt: '2026-03-20', rule: `${CAKE_TEAM.join(' and ')} win together: everyone playing or waiting gets cake.` },
 	'🥇': { name: 'Gold medal', kind: 'medal', introducedAt: '2026-04-10', rule: 'Win a tournament.' },
 	'🥈': { name: 'Silver medal', kind: 'medal', introducedAt: '2026-04-10', rule: 'Finish second in a tournament.' },

@@ -31,6 +31,12 @@ const BADGE_VALUE_COLORS = {
     '🐧': '#60a5fa', // chill comeback
     '🩹': '#f5f5f5ff', // medic
     '🪴': '#4ade51ff', // gardener
+    '🧟': '#86a86b', // match-point survivor
+    '🏓': '#f87171', // ping-pong
+    '🧊': '#67e8f9', // ice-cold decider
+    '🐢': '#a3e635', // marathon
+    '⏳': '#e5c07b', // patience
+    '🏖️': '#fde68a', // welcome back
     'φ': '#fcd34d', // golden streak
     '🧱': '#a8a29e', // wall
     '🥇': '#fbbf24', // tournament gold
@@ -303,7 +309,6 @@ export function getStatusBadges(stats) {
     const badges = [];
     const currentElo = getCurrentElo(stats);
     const medicConfig = BADGE_THRESHOLDS?.medic ?? {};
-    const gardenerConfig = BADGE_THRESHOLDS?.gardener ?? {};
     const formatBadge = (emoji, value, threshold) => {
         const badge = { emoji };
         const includeValue = typeof value === 'number' && (
@@ -328,6 +333,9 @@ export function getStatusBadges(stats) {
     if (events.comebackGoalSum >= 2) {
         badges.push(formatBadge('🪃', events.comebackGoalSum, 2));
     }
+    if (events.zombieCount > 0) {
+        badges.push(formatBadge('🧟', events.zombieCount, 1));
+    }
     if (events.shutoutCount > 0) {
         badges.push(formatBadge('📄', events.shutoutCount, 1));
     }
@@ -343,8 +351,23 @@ export function getStatusBadges(stats) {
     if (events.chillComebackCount >= 1) {
         badges.push(formatBadge('🐧', events.chillComebackCount, 1));
     }
+    if (events.pingPongCount > 0) {
+        badges.push(formatBadge('🏓', events.pingPongCount, 1));
+    }
+    if (events.iceColdCount > 0) {
+        badges.push(formatBadge('🧊', events.iceColdCount, 1));
+    }
     if (events.fastWinCount >= 1) {
         badges.push(formatBadge('☕', events.fastWinCount, 1));
+    }
+    if (events.marathonCount > 0) {
+        badges.push(formatBadge('🐢', events.marathonCount, 1));
+    }
+    if (events.patienceCount > 0) {
+        badges.push(formatBadge('⏳', events.patienceCount, 1));
+    }
+    if (events.welcomeBackCount > 0) {
+        badges.push(formatBadge('🏖️', events.welcomeBackCount, 1));
     }
     if (events.cakeCount > 0) {
         badges.push(formatBadge('🎂', events.cakeCount, 1));
@@ -374,10 +397,10 @@ export function getStatusBadges(stats) {
         badges.push(formatBadge('🩹', medicHelped, 0));
     }
 
-    // const gardenerStreak = stats.gardenerWeekdayStreak || 0;
-    // if (gardenerStreak >= (gardenerConfig.requiredWeekdays ?? 5)) {
-    //     badges.push(formatBadge('🪴', gardenerStreak, gardenerConfig.requiredWeekdays ?? 5));
-    // }
+    const gardenerStreak = stats.gardenerWeekdayStreak || 0;
+    if (gardenerStreak >= BADGE_INFO['🪴'].minLength) {
+        badges.push(formatBadge('🪴', gardenerStreak, 0));
+    }
 
     const goldenPhi = stats.goldenPhiStreak || 0;
     if (goldenPhi >= BADGE_INFO['φ'].minLength) {
