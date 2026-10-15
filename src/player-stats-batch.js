@@ -1016,7 +1016,8 @@ function addPlayerWin(winsByMatch, match, playerId) {
 }
 
 function isPlayableMatch(match) {
-    return match && !match.deleted && Array.isArray(match.teamA) && Array.isArray(match.teamB);
+    // a match still waiting for its server timestamp (null) would sort as 1970 and fake a long absence
+    return match && !match.deleted && typeof match.timestamp === 'number' && Array.isArray(match.teamA) && Array.isArray(match.teamB);
 }
 
 /**

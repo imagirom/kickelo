@@ -28,7 +28,7 @@ the leaderboard and the tally.
 | 🐕 | Underdog | points | Win against a team ≥100 Elo higher (team averages); `floor(diff/100)` points | points today | 2025-11-19 |
 | 🪃 | Boomerang | points | Win after trailing by ≥2 goals; points = biggest deficit erased | points today | 2025-11-19 |
 | 📄 | Clean sheet | event | Win 5:0 | count today | 2025-11-19 |
-| 🎩 | Hat trick | event | Win with 3 goals in a row within 30 s (`hattrick.windowMs`; 40 s until 2026-10-15) | count today | 2026-03-20 |
+| 🎩 | Hat trick | event | Win with 3 goals in a row within 30 s (`hattrick.windowMs`; was 40 s until 2026-10-15 — the 30 s window applies to all matches, so earlier tallies are recomputed with it) | count today | 2026-03-20 |
 | ☕ | Coffee break | event | Win a match lasting ≤ 2:30 | count today | 2025-11-23 |
 | 🎢 | Rollercoaster | event | Win a match with ≥3 lead changes | count today | 2025-11-23 |
 | 🐧 | Chill comeback | event | Win 5:4 after trailing the whole match | count today | 2025-11-23 |
