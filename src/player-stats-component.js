@@ -1,4 +1,5 @@
-import { getCachedStats, isCacheReady, getSeasonMatchDelta } from './stats-cache-service.js';
+import { getCachedStats, getAllCachedStats, isCacheReady, getSeasonMatchDelta } from './stats-cache-service.js';
+import { renderEmojiCollection, summarizeEmojiTallies } from './emoji-stats.js';
 import { allMatches } from './match-data-service.js';
 import { MAX_GOALS } from './constants.js';
 import Chart from "chart.js/auto";
@@ -365,6 +366,78 @@ template.innerHTML = `
             text-align: right;
         }
 
+        .emoji-collection-header {
+            margin: 0 0 8px;
+            color: var(--text-color-secondary);
+        }
+
+        .emoji-collection-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+            gap: 6px;
+        }
+
+        .emoji-cell {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1px;
+            padding: 6px 2px;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            background-color: var(--background-color-primary);
+            color: var(--text-color-primary);
+            font: inherit;
+            cursor: pointer;
+            min-width: 0;
+        }
+
+        .emoji-cell.selected {
+            border-color: var(--accent-blue, #6cabc2);
+        }
+
+        .emoji-glyph {
+            font-size: 1.6em;
+            line-height: 1.2;
+        }
+
+        .emoji-count {
+            font-size: 0.85em;
+            font-weight: 600;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .emoji-max,
+        .emoji-date {
+            font-size: 0.75em;
+            font-weight: normal;
+            color: var(--text-color-secondary);
+        }
+
+        .emoji-cell.locked .emoji-glyph {
+            filter: grayscale(1);
+            opacity: 0.3;
+        }
+
+        .emoji-cell.locked .emoji-count {
+            font-size: 0.75em;
+            line-height: 1.2;
+            white-space: normal;
+            font-weight: normal;
+            color: var(--text-color-secondary);
+            opacity: 0.6;
+        }
+
+        .emoji-detail {
+            margin: 8px 0 0;
+            min-height: 2.6em;
+            font-size: 0.9em;
+            color: var(--text-color-secondary);
+        }
+
     </style>
     <div class="modal-content">
         <div class="modal-header">
@@ -411,6 +484,12 @@ template.innerHTML = `
                     <div id="performanceContainer" class="performance-snapshot-container">
                         <!-- Content will be rendered here -->
                     </div>
+                </div>
+
+                <!-- Emoji Collection Section -->
+                <div class="stats-section">
+                    <h3>Emoji Collection</h3>
+                    <div id="emojiCollectionContainer"></div>
                 </div>
 
                 <!-- ELO Flow Section -->
@@ -535,6 +614,8 @@ class PlayerStatsComponent extends HTMLElement {
             this.renderEloGraph(eloTrajectory);
             this.renderRecentMatches();
             this.renderPerformanceSnapshot(longestStreaks, streakyness, cachedStats);
+            renderEmojiCollection(this.shadowRoot.getElementById('emojiCollectionContainer'),
+                cachedStats.emojiTally, summarizeEmojiTallies(getAllCachedStats()));
             this.renderEloFlowCharts(eloGainsLosses);
             this.renderWinLossTable(winLossRatios);
             this.renderTeammateWinLossTable(teammateRatios);

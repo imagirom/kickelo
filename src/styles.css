@@ -1444,6 +1444,108 @@ body.paused > *:not(#pauseOverlay) {
 
 
 /* =============================
+   Emoji Stats
+   ============================= */
+.emoji-stats-container {
+  margin-top: 16px;
+  font-size: 0.9em;
+}
+
+.emoji-stats-empty {
+  color: var(--text-color-secondary);
+}
+
+.emoji-stats-subheading {
+  margin: 0 0 6px;
+  font-size: 1em;
+  color: var(--text-color-secondary);
+}
+
+.emoji-rarest-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+  color: var(--text-color-secondary);
+}
+
+.emoji-rarest-list li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 0;
+}
+
+.emoji-rarest-list .emoji-glyph {
+  font-size: 1.3em;
+  flex-shrink: 0;
+}
+
+.emoji-rarest-list strong {
+  color: var(--text-color-primary);
+}
+
+/* The table scrolls inside its own wrapper; the player column stays put */
+.emoji-stats-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #444 transparent;
+  border-radius: 5px;
+  background-color: var(--background-color-primary);
+}
+
+.emoji-stats-table {
+  /* separate: collapsed borders bleed past the sticky column while scrolling */
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.emoji-stats-table th,
+.emoji-stats-table td {
+  padding: 5px 7px;
+  text-align: center;
+  min-width: 1.6em;
+}
+
+.emoji-stats-table thead th {
+  font-size: 1.15em;
+  font-weight: normal;
+  cursor: help;
+}
+
+.emoji-stats-table th[scope="row"],
+.emoji-stats-table thead th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  text-align: left;
+  font-weight: 600;
+  font-size: 1em;
+  background-color: var(--background-color-primary);
+  max-width: 7em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.emoji-stats-table td.zero {
+  color: var(--text-color-disabled);
+}
+
+.emoji-stats-table td.total {
+  font-weight: 600;
+  border-left: 1px solid var(--border-color);
+}
+
+.emoji-stats-table tfoot td,
+.emoji-stats-table tfoot th {
+  font-weight: 600;
+  border-top: 1px solid var(--border-color);
+}
+
+
+/* =============================
    Confirm Dialog
    ============================= */
 .confirm-backdrop {
