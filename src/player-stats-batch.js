@@ -1044,7 +1044,8 @@ export function computePatienceWins(matches, minSatOut = BADGE_THRESHOLDS.patien
         for (const playerId of [...match.teamA, ...match.teamB]) {
             if ((satOut[playerId] || 0) >= minSatOut) waited.add(playerId);
             satOut[playerId] = 0;
-            if (winners.includes(playerId) && waited.delete(playerId)) addPlayerWin(wins, match, playerId);
+            // unranked matches count as presence, but only a ranked win can earn (and use up) the badge
+            if (match.ranked !== false && winners.includes(playerId) && waited.delete(playerId)) addPlayerWin(wins, match, playerId);
         }
         for (const playerId of match.pairingMetadata?.waitingPlayers || []) {
             satOut[playerId] = (satOut[playerId] || 0) + 1;
@@ -1072,7 +1073,8 @@ export function computeWelcomeBackWins(matches, minDaysAway = BADGE_THRESHOLDS.w
             // Math.round: a day across a DST switch is 23 or 25 hours
             if (Math.round((dayKey - lastPlayedDay[playerId]) / MILLIS_PER_DAY) >= minDaysAway) away.add(playerId);
             lastPlayedDay[playerId] = dayKey;
-            if (winners.includes(playerId) && away.delete(playerId)) addPlayerWin(wins, match, playerId);
+            // unranked matches count as playing, but only a ranked win can earn (and use up) the badge
+            if (match.ranked !== false && winners.includes(playerId) && away.delete(playerId)) addPlayerWin(wins, match, playerId);
         }
     }
     return wins;

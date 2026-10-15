@@ -138,6 +138,18 @@ check('🏖️ an unranked match in between counts as playing', computeWelcomeBa
     match(at(11, 1), 'U', 'Opp'), { ...match(at(11, 10), 'Opp', 'U'), ranked: false }, match(at(11, 16), 'U', 'Opp'),
 ])).size, 0);
 
+// An unranked first win must not use up the badge: the next ranked win earns it
+const unrankedFirst = [
+    match(at(11, 1), 'U', 'Opp'), { ...match(at(11, 21, 9), 'U', 'Opp'), ranked: false }, match(at(11, 21, 10), 'U', 'Opp'),
+];
+check('🏖️ unranked first win back: awarded at the next ranked win', winners(computeWelcomeBackWins(newestFirst(unrankedFirst))), [[at(11, 21, 10), ['U']]]);
+check('🏖️ unranked first win back: in the tally', tallyOf(unrankedFirst.filter(m => m.ranked !== false), { allMatches: newestFirst(unrankedFirst) })('U', '🏖️'), 1);
+const unrankedPatience = [
+    game(9, ['A', 'B'], ['C', 'D'], 'A', ['X']), game(10, ['A', 'B'], ['C', 'D'], 'A', ['X']),
+    { ...game(11, ['X', 'A'], ['C', 'D'], 'A'), ranked: false }, game(12, ['X', 'A'], ['C', 'D'], 'A'),
+];
+check('⏳ unranked first win after sitting out: awarded at the next ranked win', winners(computePatienceWins(newestFirst(unrankedPatience))), [[at(11, 3, 12), ['X']]]);
+
 console.log('\n=== 🪴 gardener ===');
 // Mon 2 Nov .. Mon 9 Nov 2026 (weekend skipped) = 6 weekdays in a row, then a gap
 const gardenDays = [2, 3, 4, 5, 6, 9, 11, 12];
