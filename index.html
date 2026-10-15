@@ -338,7 +338,7 @@
   <div class="boxed collapsed" id="leaderboardOptions">
     <button id="showInactiveToggle" class="button">Show inactive players</button>
     <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
-      <span style="white-space: nowrap;">Sort by:</span>
+      <span style="white-space: nowrap;">Show:</span>
       <select id="sortBySelect" class="sortBySelect" style="flex: 1; width: 100%;">
         <option value="elo">ELO Rating</option>
         <option value="highestElo">Highest ELO</option>
@@ -349,9 +349,8 @@
         <option value="avgTimeTeam">Avg Team Goal Time</option>
         <option value="avgTimeOpponent">Avg Opponent Goal Time</option>
         <option value="streakiness">Streakiness</option>
-        <option value="longestWinStreak">Longest Win Streak</option>
-        <option value="longestGoldenStreak">Longest φ Streak</option>
-        <option value="longestPositiveDayRun">Highest Climber</option>
+        <option value="emojis">Emojis</option>
+        <option value="streaks">Longest streaks</option>
         <option value="openskill">OpenSkill Rating</option>
         <option value="openskillMuSigma">OpenSkill μ / σ</option>
         <option value="offenseElo">Offense ELO</option>
@@ -366,6 +365,7 @@
     </div>
   </div>
 
+  <div id="leaderboardChips" class="leaderboard-chips" hidden></div>
   <ul id="leaderboard" class="shared-list"></ul>
 
   <!-- ELO graph for all players -->
@@ -387,10 +387,6 @@
   <!-- Activity Heatmap -->
   <h2 id="activityHeatmapHeading" class="section-heading">Activity Heatmap</h2>
   <div id="activityHeatmap" class="activity-heatmap-container"></div>
-
-  <!-- Emoji stats -->
-  <h2 id="emojiStatsHeading" class="section-heading">Emoji Stats</h2>
-  <div id="emojiStats" class="emoji-stats-container"></div>
 
   <!-- Display recent matches -->
   <h2 id="recentMatchesHeading" class="hidden section-heading">Recent Matches</h2>

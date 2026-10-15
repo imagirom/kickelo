@@ -487,6 +487,52 @@ button:hover {
   margin-left: 2px;
 }
 
+.shared-list li.leaderboard-note {
+  background: none;
+  box-shadow: none;
+  border: none;
+  padding: 4px 10px;
+  font-size: 13px;
+  color: var(--text-color-secondary);
+}
+
+/* Emoji chips above the list ("Emojis" / "Longest streaks" views) */
+.leaderboard-chips {
+  margin-bottom: 8px;
+}
+
+.leaderboard-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.leaderboard-chip {
+  width: auto;
+  min-width: 2.6em;
+  margin: 0;
+  padding: 4px 8px;
+  font-size: 1.1em;
+  line-height: 1.2;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background-color: var(--card-background-color);
+  color: var(--text-color-primary);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.leaderboard-chip.selected {
+  border-color: #6cabc2;
+  background-color: rgba(108, 171, 194, 0.3);
+}
+
+.leaderboard-chip-note {
+  margin: 6px 0;
+  font-size: 13px;
+  color: var(--text-color-secondary);
+}
+
 .leaderboard-daily-change {
   font-size: 14px;
   font-weight: 600;
@@ -1440,108 +1486,6 @@ body.paused > *:not(#pauseOverlay) {
   fill: var(--text-color-secondary, #aaa);
   font-size: 9px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-}
-
-
-/* =============================
-   Emoji Stats
-   ============================= */
-.emoji-stats-container {
-  margin-top: 16px;
-  font-size: 0.9em;
-}
-
-.emoji-stats-empty {
-  color: var(--text-color-secondary);
-}
-
-.emoji-stats-subheading {
-  margin: 0 0 6px;
-  font-size: 1em;
-  color: var(--text-color-secondary);
-}
-
-.emoji-rarest-list {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 16px;
-  color: var(--text-color-secondary);
-}
-
-.emoji-rarest-list li {
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
-  padding: 3px 0;
-}
-
-.emoji-rarest-list .emoji-glyph {
-  font-size: 1.3em;
-  flex-shrink: 0;
-}
-
-.emoji-rarest-list strong {
-  color: var(--text-color-primary);
-}
-
-/* The table scrolls inside its own wrapper; the player column stays put */
-.emoji-stats-scroll {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-  scrollbar-color: #444 transparent;
-  border-radius: 5px;
-  background-color: var(--background-color-primary);
-}
-
-.emoji-stats-table {
-  /* separate: collapsed borders bleed past the sticky column while scrolling */
-  border-collapse: separate;
-  border-spacing: 0;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.emoji-stats-table th,
-.emoji-stats-table td {
-  padding: 5px 7px;
-  text-align: center;
-  min-width: 1.6em;
-}
-
-.emoji-stats-table thead th {
-  font-size: 1.15em;
-  font-weight: normal;
-  cursor: help;
-}
-
-.emoji-stats-table th[scope="row"],
-.emoji-stats-table thead th:first-child {
-  position: sticky;
-  left: 0;
-  z-index: 1;
-  text-align: left;
-  font-weight: 600;
-  font-size: 1em;
-  background-color: var(--background-color-primary);
-  max-width: 7em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.emoji-stats-table td.zero {
-  color: var(--text-color-disabled);
-}
-
-.emoji-stats-table td.total {
-  font-weight: 600;
-  border-left: 1px solid var(--border-color);
-}
-
-.emoji-stats-table tfoot td,
-.emoji-stats-table tfoot th {
-  font-weight: 600;
-  border-top: 1px solid var(--border-color);
 }
 
 

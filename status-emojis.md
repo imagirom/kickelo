@@ -9,7 +9,7 @@ gained or lost through ranked match results.
 
 `BADGE_INFO` in `src/constants.js` is the single list of badges: emoji → `{ name, rule, kind,
 introducedAt, minLength? }`. The rule sentence is the user-facing explanation (leaderboard tooltips,
-player page collection, emoji stats table). Streak thresholds (`minLength`) are read from it by both
+player page collection, the leaderboard's emoji chips). Streak thresholds (`minLength`) are read from it by both
 the leaderboard and the tally.
 
 | Emoji | Name | Kind | Rule (shown in the app) | Leaderboard number | introducedAt |
@@ -102,10 +102,26 @@ Counting rules:
   - 🩹: days with a medic save after which ≥3 different teammates had been helped in the last 7 days.
 - **medal**: +1 per completed tournament, dated by its completion.
 
-Totals across emojis ("Σ" in the emoji stats table) add up these numbers, so points badges contribute
-their points.
+Totals across emojis (the leaderboard's "Emojis" view) add up these numbers, so points badges
+contribute their points.
+
+`stats.longestEmojiStreaks[emoji]` is the longest run of each streak kind in the matches passed in,
+tracked at every step (`awardStreakLevel`) regardless of minLength and introducedAt — so 🪴 and 🧱
+have history from before they existed as badges. The tally's `maxLength` only covers awarded runs.
 
 Where it is shown: the player page's **Emoji collection** (grid of all registered emojis, ×count, max
-length for streaks, first earned date; unearned ones greyed out; tap for name + rule) and the main
-page's **Emoji stats** (`src/emoji-stats-display.js`: rarest-first list and a player × emoji table
-following the leaderboard's season and show-inactive filters). Summaries live in `src/emoji-stats.js`.
+length for streaks, first earned date; unearned ones greyed out; tap for name + rule) and two
+leaderboard views under **Show** (`src/leaderboard-display.js`, following the season and
+show-inactive filters):
+
+- **Emojis**: players ranked by their emoji total, each row listing their emojis with counts (most
+  first, `+N` beyond 5 on phones / 10 on wide screens). A chip row above the list (All + every emoji
+  earned in the season, registry order) ranks by one emoji; tapping it again goes back to All. A
+  "Rarest: …" line (three lowest season totals, the holder named when there is only one) and a
+  caption with the selected emoji's name and rule sit around the chips.
+- **Longest streaks**: chips for the streak kinds (🔥 🐍 🧱 φ 🧗 🪴, default 🔥) rank by
+  `longestEmojiStreaks`.
+
+In both, players with 0 are left out and counted in a note under the list. The selected chip per
+view is remembered in `localStorage` (`kickelo_leaderboardChips`). Ranking helpers (`rankPlayers`,
+`emojiValue`, `longestStreakValue`, `rarestLine`) and the summaries live in `src/emoji-stats.js`.

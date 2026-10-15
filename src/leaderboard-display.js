@@ -10,10 +10,17 @@ import { isDevMode } from './dev-menu.js';
 import { BETTING } from './betting/betting-config.js';
 import { getBalances } from './betting/bets-service.js';
 import { footballs } from './betting/currency.js';
+import { EMOJIS, STREAK_EMOJIS, rankPlayers, emojiValue, longestStreakValue, rarestLine, summarizeEmojiTallies, escapeHtml } from './emoji-stats.js';
 
 let onPlayerClickCallback = null;
 let showInactivePlayers = false;  // Default: hide inactive players
 let sortBy = 'elo';  // Default sort by ELO rating
+
+// "Emojis" / "Longest streaks" views: the selected chip per view, remembered per browser.
+// emojis: an emoji or null (= total), streaks: a streak emoji.
+const CHIP_PREFS_KEY = 'kickelo_leaderboardChips';
+let chipPrefs = { emojis: null, streaks: STREAK_EMOJIS[0] };
+try { chipPrefs = { ...chipPrefs, ...JSON.parse(localStorage.getItem(CHIP_PREFS_KEY)) }; } catch { /* ignore */ }
 
 const DEFAULT_BADGE_VALUE_COLOR = 'var(--text-color-primary, #2d2d2d)';
 const BADGE_VALUE_COLORS = {
@@ -195,18 +202,6 @@ function getSortValue(player, stats, sortBy) {
             if (!stats || !stats.streakyness) return 0;
             return stats.streakyness.score || 0;
         }
-        case 'longestWinStreak': {
-            if (!stats || !stats.longestStreaks) return 0;
-            return stats.longestStreaks.longestWinStreak || 0;
-        }
-        case 'longestGoldenStreak': {
-            if (!stats) return 0;
-            return stats.longestGoldenPhiStreak || 0;
-        }
-        case 'longestPositiveDayRun': {
-            if (!stats) return 0;
-            return stats.longestPositiveDayRun || 0;
-        }
         default:
             return STARTING_ELO;
     }
@@ -279,18 +274,6 @@ function getDisplayValue(player, stats, sortBy) {
         case 'streakiness': {
             if (!stats || !stats.streakyness) return '0.00';
             return (stats.streakyness.score || 0).toFixed(2);
-        }
-        case 'longestWinStreak': {
-            if (!stats || !stats.longestStreaks) return '0';
-            return stats.longestStreaks.longestWinStreak || 0;
-        }
-        case 'longestGoldenStreak': {
-            if (!stats) return '0';
-            return stats.longestGoldenPhiStreak || 0;
-        }
-        case 'longestPositiveDayRun': {
-            if (!stats) return '0';
-            return stats.longestPositiveDayRun || 0;
         }
         default:
             return STARTING_ELO;
@@ -528,10 +511,168 @@ function renderGoldenFootballLeaderboard() {
     });
 }
 
+/** One clickable player row: name, value, badges ({ emoji, value?, valueColor?, emojiColor? }) and today's Elo change. */
+function createPlayerRow(name, index, valueText, badges, dailyChange) {
+    const li = document.createElement("li");
+    li.classList.add('leaderboard-item');
+
+    const playerInfoSpan = document.createElement('span');
+    playerInfoSpan.classList.add('leaderboard-player-info');
+
+    const rankSpan = document.createElement('span');
+    rankSpan.classList.add('leaderboard-rank');
+    rankSpan.textContent = `${index + 1}`;
+
+    const nameSpan = document.createElement('span');
+    nameSpan.classList.add('leaderboard-name');
+    nameSpan.textContent = name === "Julia" ? `${name} ❤️` : name;
+
+    const valueSpan = document.createElement('span');
+    valueSpan.classList.add('leaderboard-value');
+    valueSpan.textContent = valueText;
+
+    playerInfoSpan.appendChild(rankSpan);
+    playerInfoSpan.appendChild(nameSpan);
+    playerInfoSpan.appendChild(valueSpan);
+
+    const indicatorsContainer = document.createElement('span');
+    indicatorsContainer.classList.add('leaderboard-indicators');
+
+    if (badges.length > 0) {
+        const badgesContainer = document.createElement('span');
+        badgesContainer.classList.add('leaderboard-badges');
+        badges.forEach((badge) => {
+            const badgeSpan = document.createElement('span');
+            badgeSpan.classList.add('leaderboard-badge');
+            const info = BADGE_INFO[badge.emoji];
+            if (info) badgeSpan.title = `${info.name}: ${info.rule}`;
+            const emojiSpan = document.createElement('span');
+            emojiSpan.textContent = badge.emoji;
+            if (badge.emojiColor) {
+                emojiSpan.style.color = badge.emojiColor;
+            }
+            badgeSpan.appendChild(emojiSpan);
+
+            if (badge.value !== undefined) {
+                const bvSpan = document.createElement('span');
+                bvSpan.textContent = badge.value;
+                bvSpan.classList.add('leaderboard-badge-value');
+                bvSpan.style.color = badge.valueColor || DEFAULT_BADGE_VALUE_COLOR;
+                badgeSpan.appendChild(bvSpan);
+            }
+            badgesContainer.appendChild(badgeSpan);
+        });
+        indicatorsContainer.appendChild(badgesContainer);
+    }
+
+    // Daily ELO Change Indicator
+    if (dailyChange) {
+        const changeSpan = document.createElement('span');
+        changeSpan.classList.add('leaderboard-daily-change');
+        if (dailyChange > 0) {
+            changeSpan.textContent = `▲ ${Math.round(dailyChange)}`;
+            changeSpan.classList.add('positive');
+        } else if (dailyChange < 0) {
+            changeSpan.textContent = `▼ ${Math.round(Math.abs(dailyChange))}`;
+            changeSpan.classList.add('negative');
+        }
+        if (changeSpan.textContent) {
+            indicatorsContainer.appendChild(changeSpan);
+        }
+    }
+
+    li.appendChild(playerInfoSpan);
+    li.appendChild(indicatorsContainer);
+
+    li.addEventListener("click", () => {
+        if (onPlayerClickCallback) {
+            onPlayerClickCallback(name);
+        }
+    });
+
+    if (index === 0) li.classList.add("gold");
+    else if (index === 1) li.classList.add("silver");
+    else if (index === 2) li.classList.add("bronze");
+    return li;
+}
+
+/**
+ * The "Emojis" (season counts, total or one emoji) and "Longest streaks" (longest run per streak
+ * emoji) views: chips above the list pick the emoji. Players without it are left out with a note.
+ */
+function renderEmojiLeaderboard(chipsContainer) {
+    const isStreaks = sortBy === 'streaks';
+    const allStats = getAllCachedStats() || {};
+    const visible = Object.fromEntries(allPlayers
+        .filter((player) => isPlayerVisible(allStats[player.name]))
+        .map((player) => [player.name, allStats[player.name]]));
+    const summary = summarizeEmojiTallies(visible);
+
+    const choices = isStreaks ? STREAK_EMOJIS : EMOJIS.filter((emoji) => summary[emoji].total > 0);
+    const selected = choices.includes(chipPrefs[sortBy]) ? chipPrefs[sortBy] : (isStreaks ? STREAK_EMOJIS[0] : null);
+    const valueOf = isStreaks ? (stats) => longestStreakValue(stats, selected) : (stats) => emojiValue(stats, selected);
+    const { rows, without } = rankPlayers(visible, valueOf);
+
+    if (chipsContainer) {
+        const chip = (emoji, label) => {
+            const info = BADGE_INFO[emoji];
+            return `<button type="button" class="leaderboard-chip${emoji === selected ? ' selected' : ''}" data-emoji="${emoji ?? ''}"
+                ${info ? `title="${escapeHtml(info.name)}"` : ''}>${label ?? emoji}</button>`;
+        };
+        const info = BADGE_INFO[selected];
+        const caption = isStreaks
+            ? `${selected} ${info.name}: longest run in the season, shorter ones included. ${info.rule}`
+            : info ? `${selected} ${info.name}: ${info.rule}` : 'All emojis earned in the season (points badges count their points). Tap one to rank by it.';
+        const rarest = isStreaks ? '' : rarestLine(summary);
+        chipsContainer.innerHTML = `
+            ${rarest ? `<p class="leaderboard-chip-note">${escapeHtml(rarest)}</p>` : ''}
+            <div class="leaderboard-chip-row">${isStreaks ? '' : chip(null, 'All')}${choices.map((emoji) => chip(emoji)).join('')}</div>
+            <p class="leaderboard-chip-note">${escapeHtml(caption)}</p>`;
+        chipsContainer.hidden = false;
+        chipsContainer.querySelectorAll('.leaderboard-chip').forEach((button) => {
+            button.addEventListener('click', () => {
+                const emoji = button.dataset.emoji || null;
+                // Tapping the selected emoji again goes back to the total (Emojis view only)
+                chipPrefs[sortBy] = emoji === selected && !isStreaks ? null : emoji;
+                try { localStorage.setItem(CHIP_PREFS_KEY, JSON.stringify(chipPrefs)); } catch { /* ignore */ }
+                updateLeaderboardDisplay();
+            });
+        });
+    }
+
+    if (rows.length === 0) {
+        leaderboardList.innerHTML = `<li>No ${isStreaks ? 'streaks' : 'emojis'} in this season yet.</li>`;
+        return;
+    }
+
+    // ponytail: fixed badge budget per row, measured fits at 400px; re-render on resize if it matters
+    const maxBadges = window.matchMedia('(min-width: 600px)').matches ? 10 : 5;
+    rows.forEach((row, index) => {
+        let badges = [];
+        if (!isStreaks) {
+            const tally = visible[row.name].emojiTally || {};
+            const earned = EMOJIS.filter((emoji) => tally[emoji])
+                .sort((a, b) => (b === selected) - (a === selected) || tally[b].count - tally[a].count);
+            badges = earned.slice(0, maxBadges).map((emoji) => ({
+                emoji, value: tally[emoji].count, valueColor: BADGE_VALUE_COLORS[emoji], emojiColor: BADGE_EMOJI_COLORS[emoji],
+            }));
+            if (earned.length > maxBadges) badges.push({ emoji: `+${earned.length - maxBadges}` });
+        }
+        leaderboardList.appendChild(createPlayerRow(row.name, index, row.value, badges));
+    });
+    if (without > 0) {
+        const note = document.createElement('li');
+        note.classList.add('leaderboard-note');
+        note.textContent = `${without} more ${without === 1 ? 'player' : 'players'} without ${isStreaks ? `a ${selected} streak` : selected ?? 'emojis'}`;
+        leaderboardList.appendChild(note);
+    }
+}
+
 // The main function to render the leaderboard from the local 'allPlayers' array
 async function updateLeaderboardDisplay() {
     leaderboardList.innerHTML = "";
-    let index = 0;
+    const leaderboardChips = document.getElementById('leaderboardChips');
+    if (leaderboardChips) leaderboardChips.hidden = true;
 
     if (sortBy === 'teamElo') {
         renderTeamLeaderboard();
@@ -545,6 +686,11 @@ async function updateLeaderboardDisplay() {
 
     if (allPlayers.length === 0) {
         leaderboardList.innerHTML = "<li>No players found.</li>";
+        return;
+    }
+
+    if (sortBy === 'emojis' || sortBy === 'streaks') {
+        renderEmojiLeaderboard(leaderboardChips);
         return;
     }
 
@@ -578,96 +724,10 @@ async function updateLeaderboardDisplay() {
         return;
     }
 
-    filteredPlayers.forEach((player) => {
-        const li = document.createElement("li");
-        li.classList.add('leaderboard-item');
-
-        const playerInfoSpan = document.createElement('span');
-        playerInfoSpan.classList.add('leaderboard-player-info');
-
-        const rankSpan = document.createElement('span');
-        rankSpan.classList.add('leaderboard-rank');
-        rankSpan.textContent = `${index + 1}`;
-
-        const nameSpan = document.createElement('span');
-        nameSpan.classList.add('leaderboard-name');
+    filteredPlayers.forEach((player, index) => {
         const playerStats = allStats[player.name];
-        const playerName = player.name === "Julia" ? `${player.name} ❤️` : player.name;
-        nameSpan.textContent = playerName;
-
-        const valueSpan = document.createElement('span');
-        valueSpan.classList.add('leaderboard-value');
-        valueSpan.textContent = getDisplayValue(player, playerStats, sortBy);
-
-        playerInfoSpan.appendChild(rankSpan);
-        playerInfoSpan.appendChild(nameSpan);
-        playerInfoSpan.appendChild(valueSpan);
-
-        const indicatorsContainer = document.createElement('span');
-        indicatorsContainer.classList.add('leaderboard-indicators');
-        
-        if (playerStats) {
-            const statusBadges = getStatusBadges(playerStats);
-            if (statusBadges.length > 0) {
-                const badgesContainer = document.createElement('span');
-                badgesContainer.classList.add('leaderboard-badges');
-                statusBadges.forEach((badge) => {
-                    const badgeSpan = document.createElement('span');
-                    badgeSpan.classList.add('leaderboard-badge');
-                    const info = BADGE_INFO[badge.emoji];
-                    if (info) badgeSpan.title = `${info.name}: ${info.rule}`;
-                    const emojiSpan = document.createElement('span');
-                    emojiSpan.textContent = badge.emoji;
-                    if (badge.emojiColor) {
-                        emojiSpan.style.color = badge.emojiColor;
-                    }
-                    badgeSpan.appendChild(emojiSpan);
-
-                    if (badge.value !== undefined) {
-                        const bvSpan = document.createElement('span');
-                        bvSpan.textContent = badge.value;
-                        bvSpan.classList.add('leaderboard-badge-value');
-                        bvSpan.style.color = badge.valueColor || DEFAULT_BADGE_VALUE_COLOR;
-                        badgeSpan.appendChild(bvSpan);
-                    }
-                    badgesContainer.appendChild(badgeSpan);
-                });
-                indicatorsContainer.appendChild(badgesContainer);
-            }
-
-            // Daily ELO Change Indicator
-            const dailyChange = playerStats.dailyEloChange;
-            if (dailyChange) {
-                const changeSpan = document.createElement('span');
-                changeSpan.classList.add('leaderboard-daily-change');
-                if (dailyChange > 0) {
-                    changeSpan.textContent = `▲ ${Math.round(dailyChange)}`;
-                    changeSpan.classList.add('positive');
-                } else if (dailyChange < 0) {
-                    changeSpan.textContent = `▼ ${Math.round(Math.abs(dailyChange))}`;
-                    changeSpan.classList.add('negative');
-                }
-                if (changeSpan.textContent) {
-                    indicatorsContainer.appendChild(changeSpan);
-                }
-            }
-        }
-
-        li.appendChild(playerInfoSpan);
-        li.appendChild(indicatorsContainer);
-
-        li.addEventListener("click", () => {
-            if (onPlayerClickCallback) {
-                onPlayerClickCallback(player.name);
-            }
-        });
-
-        if (index === 0) li.classList.add("gold");
-        else if (index === 1) li.classList.add("silver");
-        else if (index === 2) li.classList.add("bronze");
-        index += 1;
-
-        leaderboardList.appendChild(li);
+        leaderboardList.appendChild(createPlayerRow(player.name, index, getDisplayValue(player, playerStats, sortBy),
+            playerStats ? getStatusBadges(playerStats) : [], playerStats?.dailyEloChange));
     });
     console.log("Leaderboard display updated from local data.");
 }

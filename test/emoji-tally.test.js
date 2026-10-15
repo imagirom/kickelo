@@ -1,7 +1,7 @@
 // Emoji tally (stats.emojiTally): every badge earned in the given matches, counted per the
 // rules in status-emojis.md and respecting each badge's introducedAt.
 import { computeAllPlayerStats } from '../src/player-stats-batch.js';
-import { summarizeEmojiTallies, rarestFirst } from '../src/emoji-stats.js';
+import { summarizeEmojiTallies, rarestFirst, rankPlayers, emojiValue, emojiTotal, longestStreakValue, rarestLine, STREAK_EMOJIS } from '../src/emoji-stats.js';
 
 const SECOND = 1000;
 const at = (month, day, hour = 12) => new Date(2026, month - 1, day, hour).getTime();
@@ -80,5 +80,31 @@ const rarest = rarestFirst(summary);
 check('rarest first: ascending totals, unearned left out', rarest.map(e => summary[e].total), rarest.map(e => summary[e].total).sort((x, y) => x - y));
 check('⛰: one per day with a new personal peak', summary['⛰'].total, 4); // Hat ×2 days, Streak, Back
 check('beating the 5-streak earns 🌊 and 🐕 (≥100 Elo below)', [players.Opp2.emojiTally['🌊']?.count, players.Opp2.emojiTally['🐕']?.count], [1, 1]);
+
+// Leaderboard "Emojis" / "Longest streaks" views
+console.log('\n=== leaderboard emoji views ===');
+check('streak emojis come from the registry', STREAK_EMOJIS, ['🔥', '🐍', '🧱', 'φ', '🧗', '🪴']);
+check('total = sum of counts', emojiTotal(players.Streak.emojiTally), Object.values(players.Streak.emojiTally).reduce((sum, e) => sum + e.count, 0));
+check('emojiValue: null emoji -> total', emojiValue(players.Back, null), emojiTotal(players.Back.emojiTally));
+check('emojiValue: one emoji', emojiValue(players.Back, '🪃'), 3);
+check('emojiValue: missing stats/emoji -> falsy', [emojiValue(undefined, '🪃') || 0, emojiValue(players.Opp3, '🪃') || 0, emojiValue(undefined, null)], [0, 0, 0]);
+const byBoomerang = rankPlayers(players, (s) => emojiValue(s, '🪃'));
+check('rank by one emoji: holders only, the rest counted', [byBoomerang.rows, byBoomerang.without],
+    [[{ name: 'Back', value: 3 }], Object.keys(players).length - 1]);
+check('rank: ties by name', rankPlayers({ b: 2, a: 2, c: 5 }, (v) => v).rows.map((r) => r.name), ['c', 'a', 'b']);
+check('longest 🔥 run in the season', longestStreakValue(players.Streak, '🔥'), 5);
+check('longest runs below minLength are kept (🐍 needs 7)', longestStreakValue(players.Streak, '🐍'), 2);
+check('longestStreakValue: none -> 0', [longestStreakValue(players.Opp3, 'φ'), longestStreakValue(undefined, '🔥')], [0, 0]);
+// 🪴 runs before its introducedAt count for the longest streak, but not for the tally
+const weekdays = [5, 6, 7, 8, 9].map((day, i) => match(`g${i}`, new Date(2025, 4, day, 12).getTime(), 'Gardener', 'Opp4')).reverse();
+const { players: gardenPlayers } = computeAllPlayerStats(weekdays);
+check('🪴 longest run counted before introducedAt, not tallied', [longestStreakValue(gardenPlayers.Gardener, '🪴'), gardenPlayers.Gardener.emojiTally['🪴']], [5, undefined]);
+const tiny = summarizeEmojiTallies({
+    Anna: { emojiTally: { '🧊': { count: 1, firstAt: 1 } } },
+    Ben: { emojiTally: { '🐢': { count: 1, firstAt: 2 }, '🔥': { count: 5, firstAt: 1 } } },
+    Cy: { emojiTally: { '🐢': { count: 1, firstAt: 3 } } },
+});
+check('rarest line: rarest first, single holder named', rarestLine(tiny), 'Rarest: 🧊 ×1 (Anna) · 🐢 ×2 · 🔥 ×5 (Ben)');
+check('rarest line: nothing earned -> empty', rarestLine(summarizeEmojiTallies({})), '');
 
 console.log(`\nEmoji tally tests: ${passed} passed`);

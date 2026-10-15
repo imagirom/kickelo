@@ -1,11 +1,42 @@
 // src/emoji-stats.js
-// Emoji badge summaries from the stats cache's emojiTally (selected season), and the
-// player page's "Emoji collection" grid. DOM-free apart from the render function, so
-// node tests can import it. The main page section lives in emoji-stats-display.js.
+// Emoji badge summaries from the stats cache's emojiTally (selected season), the leaderboard's
+// "Emojis" / "Longest streaks" rankings, and the player page's "Emoji collection" grid.
+// DOM-free apart from the render function, so node tests can import it.
 
 import { BADGE_INFO } from './constants.js';
 
-const EMOJIS = Object.keys(BADGE_INFO);
+export const EMOJIS = Object.keys(BADGE_INFO);
+export const STREAK_EMOJIS = EMOJIS.filter((emoji) => BADGE_INFO[emoji].kind === 'streak');
+
+/** Sum of a tally's counts (points badges add their points). */
+export const emojiTotal = (tally = {}) => EMOJIS.reduce((sum, emoji) => sum + (tally[emoji]?.count || 0), 0);
+
+/**
+ * Leaderboard ranking by an emoji value: players with value > 0, highest first, ties by name.
+ * valueOf(stats) -> number. Returns { rows: [{ name, value }], without: players left out (value 0) }.
+ */
+export function rankPlayers(statsByPlayer, valueOf) {
+    const rows = Object.entries(statsByPlayer)
+        .map(([name, stats]) => ({ name, value: valueOf(stats) || 0 }))
+        .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
+    const ranked = rows.filter((row) => row.value > 0);
+    return { rows: ranked, without: rows.length - ranked.length };
+}
+
+/** Value for the "Emojis" view: the count of one emoji, or the total when emoji is null. */
+export const emojiValue = (stats, emoji) => (emoji ? stats?.emojiTally?.[emoji]?.count : emojiTotal(stats?.emojiTally));
+
+/** Value for the "Longest streaks" view: the longest run of that streak kind in the season. */
+export const longestStreakValue = (stats, emoji) => stats?.longestEmojiStreaks?.[emoji] || 0;
+
+/** "Rarest: 🧊 ×1 (Anna) · 🐢 ×2 · 🏖️ ×3" (holder named when there is only one), '' if none earned. */
+export function rarestLine(summary, limit = 3) {
+    const parts = rarestFirst(summary).slice(0, limit).map((emoji) => {
+        const s = summary[emoji];
+        return `${emoji} ×${s.total}${s.holders === 1 ? ` (${s.first.player})` : ''}`;
+    });
+    return parts.length ? `Rarest: ${parts.join(' · ')}` : '';
+}
 
 export const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 

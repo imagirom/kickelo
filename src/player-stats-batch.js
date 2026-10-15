@@ -31,8 +31,13 @@ function awardEmoji(playerStats, emoji, timestamp, amount = 1, length) {
     if (length !== undefined) entry.maxLength = Math.max(entry.maxLength || 0, length);
 }
 
-/** Awards a streak badge for the level just reached, if it is at least the badge's minLength. */
+/**
+ * Awards a streak badge for the level just reached, if it is at least the badge's minLength.
+ * Also tracks the longest run of every streak kind (stats.longestEmojiStreaks), regardless of
+ * minLength and introducedAt, for the leaderboard's "Longest streaks" view.
+ */
 function awardStreakLevel(playerStats, emoji, timestamp, length) {
+    playerStats.longestEmojiStreaks[emoji] = Math.max(playerStats.longestEmojiStreaks[emoji] || 0, length);
     if (length >= BADGE_INFO[emoji].minLength) awardEmoji(playerStats, emoji, timestamp, 1, length);
 }
 
@@ -145,6 +150,8 @@ export function computeAllPlayerStats(matches, options = {}) {
             tournamentBadges: { gold: 0, silver: 0, bronze: 0, participant: 0 },
             // Every badge earned in the matches passed in (the season), unlike statusEvents (today only)
             emojiTally: {},
+            // Longest run per streak emoji in these matches: { '🔥': 7, '🐍': 4, ... }
+            longestEmojiStreaks: {},
         };
         stats[playerName]._lastAwardDay = {};
         stats[playerName]._medicEvents = [];
