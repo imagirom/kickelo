@@ -9,7 +9,7 @@ import {
 import {
   getReadyGames, getNextDefaultGame, getGameById,
   isSwissRoundComplete, getCurrentSwissRound, isTournamentComplete,
-  generateTeamName, canResumeGame,
+  generateTeamName, canResumeGame, computeFinalRankings,
 } from './tournament-engine.js';
 import { allMatches, getAllTimeElos } from '../match-data-service.js';
 import { showToast, showConfirm } from '../toast.js';
@@ -522,14 +522,15 @@ function bindInProgressEvents(t) {
 function renderCompletedView(t) {
   let html = '';
 
-  // Rankings
-  if (t.finalRankings && t.finalRankings.length > 0) {
+  // Rankings (re-ranked from the games, like the medal badges: older single-elim rankings were stored wrong)
+  const rankings = t.games?.length ? computeFinalRankings(t) : t.finalRankings;
+  if (rankings && rankings.length > 0) {
     html += `<h3 style="color:#ccc;margin:0 0 8px;">🏅 Final Rankings</h3>`;
     html += `<table class="tournament-rankings">
       <thead><tr>
         <th>Rank</th><th>Team</th><th>W</th><th>L</th>
       </tr></thead><tbody>`;
-    for (const r of t.finalRankings) {
+    for (const r of rankings) {
       const medal = r.rank === 1 ? '🥇' : r.rank === 2 ? '🥈' : r.rank === 3 ? '🥉' : '';
       html += `<tr>
         <td>${medal} ${r.rank}</td>

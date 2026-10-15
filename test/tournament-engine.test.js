@@ -1085,6 +1085,49 @@ console.log('\n=== computeTournamentMedals (medal badges from finalRankings) ===
   assertEq(Object.keys(computeTournamentMedals(undefined)).length, 0, 'no tournaments -> no medals');
 }
 
+{
+  // Brackets that aren't a power of two: bye wins must not shift a team into another round's rank.
+  const playOut = (n, config = {}) => {
+    const teams = makeTeams(n);
+    const { games, defaultGameOrder } = generateSingleElimBracket(teams, config);
+    const t = makeTournament(teams, 'single_elim', games, defaultGameOrder);
+    initializeBracket(t);
+    let g;
+    while ((g = getReadyGames(t)[0])) completeGame(t, g.id, 0, 'm-' + g.id, [5, 2]);
+    t.finalRankings = computeFinalRankings(t);
+    t.state = 'completed';
+    t.completedAt = 1000;
+    const medals = computeTournamentMedals([t]);
+    const count = (kind) => teams.filter(tm => medals[tm.players[0]][kind] === 1).length;
+    return { count, ranks: t.finalRankings.map(r => r.rank) };
+  };
+  for (const [n, bronze, participant] of [[3, 1, 0], [5, 2, 1], [6, 2, 2], [7, 2, 3]]) {
+    const { count, ranks } = playOut(n);
+    assertEq(count('gold'), 1, `${n}-team SE: exactly one gold`);
+    assertEq(count('silver'), 1, `${n}-team SE: exactly one silver (ranks ${ranks})`);
+    assertEq(count('bronze'), bronze, `${n}-team SE: ${bronze} bronze (semi-final losers)`);
+    assertEq(count('participant'), participant, `${n}-team SE: ${participant} participants`);
+  }
+  {
+    // Rankings stored before the fix are ignored in favour of re-ranking from the games.
+    const teams = makeTeams(3);
+    const { games, defaultGameOrder } = generateSingleElimBracket(teams);
+    const t = makeTournament(teams, 'single_elim', games, defaultGameOrder);
+    initializeBracket(t);
+    let g;
+    while ((g = getReadyGames(t)[0])) completeGame(t, g.id, 0, 'm-' + g.id, [5, 2]);
+    Object.assign(t, { state: 'completed', completedAt: 1000,
+      finalRankings: teams.map((tm, i) => ({ rank: i < 2 ? 1 : 3, teamId: tm.id })) }); // old, buggy shape
+    const golds = teams.filter(tm => computeTournamentMedals([t])[tm.players[0]].gold === 1).length;
+    assertEq(golds, 1, 'stale stored finalRankings: medals re-derived from games');
+  }
+  // A third-place match splits the semi-final losers.
+  const { count } = playOut(4, { thirdPlaceMatch: true });
+  assertEq(count('silver'), 1, '4-team SE + 3rd place: one silver');
+  assertEq(count('bronze'), 1, '4-team SE + 3rd place: one bronze');
+  assertEq(count('participant'), 1, '4-team SE + 3rd place: 3rd-place loser is rank 4');
+}
+
 // ===========================================================================
 // Summary
 // ===========================================================================

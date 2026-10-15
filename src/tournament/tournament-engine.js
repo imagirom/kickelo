@@ -238,7 +238,9 @@ export function computeTournamentMedals(tournaments, { since = 0, until = Infini
   for (const t of tournaments || []) {
     if (t.state !== 'completed' || !Array.isArray(t.finalRankings)) continue;
     if (!(t.completedAt >= since && t.completedAt <= until)) continue;
-    for (const entry of t.finalRankings) {
+    // Re-rank from the games when we have them: rankings stored before the single-elim fix are wrong.
+    const rankings = t.games?.length ? computeFinalRankings(t) : t.finalRankings;
+    for (const entry of rankings) {
       const team = t.teams?.find(tm => tm.id === entry.teamId);
       if (!team) continue;
       const kind = ['gold', 'silver', 'bronze'][entry.rank - 1] || 'participant';
@@ -254,17 +256,32 @@ export function computeTournamentMedals(tournaments, { since = 0, until = Infini
 // --- Ranking helpers ---
 
 function computeElimRankings(tournament) {
-  // In single elim, rank by wins (more wins = deeper in bracket = better).
-  // Teams with equal wins were eliminated in the same round → shared rank.
+  // In single elim, rank by the round a team was knocked out in (later = better; champion first).
+  // Teams knocked out in the same round share a rank — except the semi-final losers when a
+  // third-place match was played. Win counts don't work here: bye wins aren't counted, so in a
+  // bracket that isn't a power of two a bye team would tie with teams from another round.
   const stats = buildTeamStats(tournament);
+  for (const s of stats.values()) { s.outRound = Infinity; s.thirdPlace = 0; }
 
+  for (const game of tournament.games) {
+    if (!game.result || game.isBye) continue;
+    const winner = stats.get(game.teams[game.result.winner]?.teamId);
+    const loser = stats.get(game.teams[1 - game.result.winner]?.teamId);
+    if (game.id === '3rd') {
+      if (winner) winner.thirdPlace = 1;
+    } else if (loser) {
+      loser.outRound = game.round;
+    }
+  }
+
+  const tied = (a, b) => a.outRound === b.outRound && a.thirdPlace === b.thirdPlace;
   const sorted = Array.from(stats.values()).sort((a, b) => {
-    if (a.wins !== b.wins) return b.wins - a.wins;
+    if (!tied(a, b)) return a.outRound !== b.outRound ? b.outRound - a.outRound : b.thirdPlace - a.thirdPlace;
     // Tiebreak by seed (lower seed = higher ranked entering)
     return a.seed - b.seed;
   });
 
-  return assignRanks(sorted, (a, b) => a.wins === b.wins);
+  return assignRanks(sorted, tied);
 }
 
 function computeDoubleElimRankings(tournament) {
