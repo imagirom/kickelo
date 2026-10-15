@@ -9,8 +9,11 @@ const EMOJIS = Object.keys(BADGE_INFO);
 
 export const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
+/** "Sep 25" this year, "Sep 25, 2025" for earlier years (a 2-digit year read like a day). */
 export function formatBadgeDate(timestamp) {
-    return new Date(timestamp).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: '2-digit' });
+    const date = new Date(timestamp);
+    const thisYear = date.getFullYear() === new Date().getFullYear();
+    return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', ...(thisYear ? {} : { year: 'numeric' }) });
 }
 
 /**
