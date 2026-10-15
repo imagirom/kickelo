@@ -552,15 +552,21 @@ testHattrickBadge();
 // Tournament Badge Tests
 // ============================================================
 
+// A completed tournament as stored in /tournaments: teams + finalRankings (one entry per team).
+function completedTournament(id, completedAt, rankedTeams) {
+    const teams = rankedTeams.map(([players], i) => ({ id: 't' + (i + 1), players }));
+    return {
+        id, state: 'completed', completedAt, teams,
+        finalRankings: rankedTeams.map(([, rank], i) => ({ rank, teamId: 't' + (i + 1) })),
+    };
+}
+
 function testTournamentBadges() {
     console.log('\n=== Testing tournament badges ===\n');
     const now = Date.now();
     const HOUR = 60 * 60 * 1000;
-    const DAY = 24 * HOUR;
 
-    // Create matches with a tournament completion stamp
     const matches = [
-        // Recent match that completed a tournament (2 hours ago)
         {
             id: 'tourney-final',
             teamA: ['Alice', 'Bob'],
@@ -568,19 +574,7 @@ function testTournamentBadges() {
             winner: 'A', goalsA: 5, goalsB: 3, eloDelta: 20,
             timestamp: now - 2 * HOUR,
             tournamentId: 'tournament1',
-            tournamentCompletion: {
-                tournamentId: 'tournament1',
-                tournamentName: 'Friday Cup',
-                completedAt: now - 2 * HOUR,
-                playerRankings: {
-                    'Alice': 1, 'Bob': 1,
-                    'Charlie': 2, 'David': 2,
-                    'Eve': 3, 'Frank': 3,
-                    'Grace': 4, 'Hank': 4,
-                },
-            },
         },
-        // Earlier regular match
         {
             id: 'regular1',
             teamA: ['Alice', 'Eve'],
@@ -588,7 +582,6 @@ function testTournamentBadges() {
             winner: 'A', goalsA: 5, goalsB: 2, eloDelta: 15,
             timestamp: now - 3 * HOUR,
         },
-        // Even earlier match involving Grace and Hank
         {
             id: 'regular2',
             teamA: ['Grace', 'Hank'],
@@ -597,35 +590,39 @@ function testTournamentBadges() {
             timestamp: now - 4 * HOUR,
         },
     ];
+    const tournaments = [completedTournament('tournament1', now - 2 * HOUR, [
+        [['Alice', 'Bob'], 1], [['Charlie', 'David'], 2], [['Eve', 'Frank'], 3], [['Grace', 'Hank'], 4],
+        [['Zed', 'Yan'], 5],  // players without matches in this window are ignored
+    ])];
 
-    const { players: stats } = computeAllPlayerStats(matches);
+    const { players: stats } = computeAllPlayerStats(matches, { tournaments });
 
-    // Gold for Alice and Bob (rank 1)
     if (stats['Alice'].tournamentBadges.gold !== 1) {
         throw new Error(`Expected Alice gold=1, got ${stats['Alice'].tournamentBadges.gold}`);
     }
     if (stats['Bob'].tournamentBadges.gold !== 1) {
         throw new Error(`Expected Bob gold=1, got ${stats['Bob'].tournamentBadges.gold}`);
     }
-
-    // Silver for Charlie and David (rank 2)
     if (stats['Charlie'].tournamentBadges.silver !== 1) {
         throw new Error(`Expected Charlie silver=1, got ${stats['Charlie'].tournamentBadges.silver}`);
     }
-
-    // Bronze for Eve and Frank (rank 3)
     if (stats['Eve'].tournamentBadges.bronze !== 1) {
         throw new Error(`Expected Eve bronze=1, got ${stats['Eve'].tournamentBadges.bronze}`);
     }
-
-    // Participant for Grace and Hank (rank 4)
     if (stats['Grace'].tournamentBadges.participant !== 1) {
         throw new Error(`Expected Grace participant=1, got ${stats['Grace'].tournamentBadges.participant}`);
     }
-
-    // No other badges for Alice
     if (stats['Alice'].tournamentBadges.silver !== 0 || stats['Alice'].tournamentBadges.bronze !== 0) {
         throw new Error('Alice should only have gold badge');
+    }
+    if (stats['Zed']) {
+        throw new Error('Players without matches should not get a stats entry from medals');
+    }
+
+    // Without tournaments there are no medals (the medals no longer live on match documents)
+    const { players: noTournaments } = computeAllPlayerStats(matches);
+    if (noTournaments['Alice'].tournamentBadges.gold !== 0) {
+        throw new Error('Expected no medals without options.tournaments');
     }
 
     console.log('✓ Tournament badges assigned correctly by rank');
@@ -636,8 +633,7 @@ testTournamentBadges();
 function testTournamentBadgesExpired() {
     console.log('\n=== Testing expired tournament badges ===\n');
     const now = Date.now();
-    const HOUR = 60 * 60 * 1000;
-    const DAY = 24 * HOUR;
+    const DAY = 24 * 60 * 60 * 1000;
 
     // Tournament completed beyond the badge duration window
     const expiredTime = now - (TOURNAMENT_BADGE_DURATION_DAYS + 1) * DAY;
@@ -649,19 +645,13 @@ function testTournamentBadgesExpired() {
             teamB: ['Charlie', 'David'],
             winner: 'A', goalsA: 5, goalsB: 3, eloDelta: 20,
             timestamp: expiredTime,
-            tournamentCompletion: {
-                tournamentId: 'old-tournament',
-                tournamentName: 'Old Cup',
-                completedAt: expiredTime,
-                playerRankings: {
-                    'Alice': 1, 'Bob': 1,
-                    'Charlie': 2, 'David': 2,
-                },
-            },
         },
     ];
+    const tournaments = [completedTournament('old-tournament', expiredTime, [
+        [['Alice', 'Bob'], 1], [['Charlie', 'David'], 2],
+    ])];
 
-    const { players: stats } = computeAllPlayerStats(matches);
+    const { players: stats } = computeAllPlayerStats(matches, { tournaments });
 
     if (stats['Alice'].tournamentBadges.gold !== 0) {
         throw new Error(`Expected Alice gold=0 (expired), got ${stats['Alice'].tournamentBadges.gold}`);
@@ -682,43 +672,28 @@ function testMultipleTournamentBadges() {
     const DAY = 24 * HOUR;
 
     const matches = [
-        // Tournament 2 final (more recent)
         {
             id: 'tourney2-final',
             teamA: ['Alice', 'Bob'],
             teamB: ['Charlie', 'David'],
             winner: 'A', goalsA: 5, goalsB: 4, eloDelta: 20,
             timestamp: now - 1 * HOUR,
-            tournamentCompletion: {
-                tournamentId: 'tournament2',
-                tournamentName: 'Monday Cup',
-                completedAt: now - 1 * HOUR,
-                playerRankings: {
-                    'Alice': 1, 'Bob': 1,
-                    'Charlie': 2, 'David': 2,
-                },
-            },
         },
-        // Tournament 1 final (older but still within window)
         {
             id: 'tourney1-final',
             teamA: ['Alice', 'Charlie'],
             teamB: ['Bob', 'David'],
             winner: 'B', goalsA: 3, goalsB: 5, eloDelta: 20,
             timestamp: now - 2 * DAY,
-            tournamentCompletion: {
-                tournamentId: 'tournament1',
-                tournamentName: 'Friday Cup',
-                completedAt: now - 2 * DAY,
-                playerRankings: {
-                    'Alice': 2, 'Charlie': 2,
-                    'Bob': 1, 'David': 1,
-                },
-            },
         },
     ];
+    const tournaments = [
+        completedTournament('tournament2', now - 1 * HOUR, [[['Alice', 'Bob'], 1], [['Charlie', 'David'], 2]]),
+        completedTournament('tournament1', now - 2 * DAY, [[['Bob', 'David'], 1], [['Alice', 'Charlie'], 2]]),
+        { ...completedTournament('deleted', now - 1 * HOUR, [[['Alice', 'Bob'], 1]]), state: 'deleted' },
+    ];
 
-    const { players: stats } = computeAllPlayerStats(matches);
+    const { players: stats } = computeAllPlayerStats(matches, { tournaments });
 
     // Alice: gold from tournament2, silver from tournament1
     if (stats['Alice'].tournamentBadges.gold !== 1) {
@@ -728,9 +703,16 @@ function testMultipleTournamentBadges() {
         throw new Error(`Expected Alice silver=1, got ${stats['Alice'].tournamentBadges.silver}`);
     }
 
-    // Bob: gold from both tournaments
+    // Bob: gold from both tournaments (the deleted one does not count)
     if (stats['Bob'].tournamentBadges.gold !== 2) {
         throw new Error(`Expected Bob gold=2, got ${stats['Bob'].tournamentBadges.gold}`);
+    }
+
+    // Selected season: only tournaments completed inside it count
+    const season = { start: new Date(now - 1 * DAY), end: new Date(now + DAY) };
+    const { players: seasonStats } = computeAllPlayerStats(matches, { tournaments, season });
+    if (seasonStats['Bob'].tournamentBadges.gold !== 1 || seasonStats['Alice'].tournamentBadges.silver !== 0) {
+        throw new Error('Expected only the tournament completed inside the season to count');
     }
 
     console.log('✓ Multiple tournament badges aggregate correctly');

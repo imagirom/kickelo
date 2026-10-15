@@ -227,6 +227,30 @@ export function computeFinalRankings(tournament) {
   }
 }
 
+/**
+ * Medal counts per player from completed tournaments' finalRankings
+ * (rank 1 = gold, 2 = silver, 3 = bronze, worse = participant; shared ranks share the medal).
+ * Only tournaments completed within [since, until] count — the completion date decides the season.
+ * Returns { [player]: { gold, silver, bronze, participant } }.
+ */
+export function computeTournamentMedals(tournaments, { since = 0, until = Infinity } = {}) {
+  const medals = {};
+  for (const t of tournaments || []) {
+    if (t.state !== 'completed' || !Array.isArray(t.finalRankings)) continue;
+    if (!(t.completedAt >= since && t.completedAt <= until)) continue;
+    for (const entry of t.finalRankings) {
+      const team = t.teams?.find(tm => tm.id === entry.teamId);
+      if (!team) continue;
+      const kind = ['gold', 'silver', 'bronze'][entry.rank - 1] || 'participant';
+      for (const player of team.players) {
+        medals[player] ??= { gold: 0, silver: 0, bronze: 0, participant: 0 };
+        medals[player][kind]++;
+      }
+    }
+  }
+  return medals;
+}
+
 // --- Ranking helpers ---
 
 function computeElimRankings(tournament) {

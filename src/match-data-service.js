@@ -1,7 +1,9 @@
 import { db, collection, onSnapshot } from './firebase-service.js';
 import { updateStatsCache } from './stats-cache-service.js';
-import { INACTIVE_THRESHOLD_DAYS } from './constants.js';
+import { INACTIVE_THRESHOLD_DAYS, STARTING_ELO } from './constants.js';
 import { filterMatchesBySeason, getSelectedSeason } from './season-service.js';
+import { computeAllPlayerStats } from './player-stats-batch.js';
+import { getVisibleTournaments } from './tournament/tournament-service.js';
 
 function filterRankedMatches(matches) {
     return matches.filter((match) => match?.ranked !== false);
@@ -84,9 +86,7 @@ export function initializeMatchesData() {
 
         // Update the stats cache with all player statistics
         // This computes all stats in a single efficient pass
-        const season = getSelectedSeason();
-        const seasonMatches = filterMatchesBySeason(allMatches, season);
-        updateStatsCache(filterRankedMatches(seasonMatches), { season });
+        refreshSeasonStats();
 
         // Dispatch a custom event to let your UI components know
         // that new data is available and they should re-render.
@@ -106,7 +106,35 @@ export function resetMatchDataListener() {
 
 export function refreshSeasonStats(season = getSelectedSeason()) {
     const seasonMatches = filterMatchesBySeason(allMatches, season);
-    updateStatsCache(filterRankedMatches(seasonMatches), { season });
+    // Tournaments feed the medal badges (derived from their finalRankings).
+    updateStatsCache(filterRankedMatches(seasonMatches), { season, tournaments: getVisibleTournaments() });
+}
+
+// Medals change only when a tournament completes, is re-completed after an edit, or is deleted/restored:
+// recompute stats then, not on every tournament game.
+let completedTournamentsKey = '';
+window.addEventListener('tournaments-updated', () => {
+    const key = getVisibleTournaments()
+        .filter((t) => t.state === 'completed')
+        .map((t) => `${t.id}:${t.completedAt}`)
+        .join(',');
+    if (key === completedTournamentsKey) return;
+    completedTournamentsKey = key;
+    if (isDataReady) refreshSeasonStats();
+});
+
+/**
+ * Current all-time overall Elo per player name, from all ranked matches (ignores the selected season).
+ * null until match data has loaded.
+ */
+export function getAllTimeElos() {
+    if (!isDataReady) return null;
+    const { players } = computeAllPlayerStats(filterRankedMatches(allMatches));
+    const elos = {};
+    for (const [name, s] of Object.entries(players)) {
+        elos[name] = s.eloTrajectory.at(-1)?.elo ?? STARTING_ELO;
+    }
+    return elos;
 }
 
 export function getRecentActivePlayers(lookbackDays = INACTIVE_THRESHOLD_DAYS) {

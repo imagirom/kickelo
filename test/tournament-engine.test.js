@@ -18,6 +18,7 @@ import {
   hasCompletedDownstream,
   uncompleteGame,
   canResumeGame,
+  computeTournamentMedals,
 } from '../src/tournament/tournament-engine.js';
 
 import {
@@ -1033,6 +1034,55 @@ console.log('\n=== canResumeGame (tournament game restored after a reload) ===')
   assertEq(canResumeGame({ ...t, state: 'completed' }, saved), false, 'tournament completed -> drop');
   completeGame(t, g.id, 0, 'm1', [5, 3]);
   assertEq(canResumeGame(t, saved), false, 'logged on another phone -> drop');
+}
+
+// ===========================================================================
+console.log('\n=== computeTournamentMedals (medal badges from finalRankings) ===');
+// ===========================================================================
+
+{
+  // Play a 4-team single elim to the end: higher seed (team index 0) always wins.
+  const teams = makeTeams(4);
+  const { games, defaultGameOrder } = generateSingleElimBracket(teams);
+  const t = makeTournament(teams, 'single_elim', games, defaultGameOrder);
+  initializeBracket(t);
+  let g;
+  while ((g = getReadyGames(t)[0])) completeGame(t, g.id, 0, 'm-' + g.id, [5, 2]);
+  assert(isTournamentComplete(t), 'synthetic tournament played to completion');
+  t.finalRankings = computeFinalRankings(t);
+  t.state = 'completed';
+  t.completedAt = 1000;
+
+  const byRank = Object.fromEntries(t.finalRankings.map(r => [r.teamId, r.rank]));
+  const playersOf = (rank) => t.finalRankings.filter(r => r.rank === rank)
+    .flatMap(r => teams.find(tm => tm.id === r.teamId).players);
+  const medals = computeTournamentMedals([t]);
+  for (const p of playersOf(1)) assertEq(medals[p].gold, 1, `${p} (rank 1) gets gold`);
+  for (const p of playersOf(2)) assertEq(medals[p].silver, 1, `${p} (rank 2) gets silver`);
+  assertEq(playersOf(3).length, 4, 'both semi-final losers share rank 3');
+  for (const p of playersOf(3)) assertEq(medals[p].bronze, 1, `${p} (shared rank 3) gets bronze`);
+  assertEq(Object.keys(medals).length, 8, 'every player of every team is counted');
+  assertEq(Object.values(byRank).includes(4), false, 'no rank 4 in a 4-team single elim');
+
+  // Rank 4+ is a participation medal (round robin ranks every team).
+  const rr = { state: 'completed', completedAt: 1000, teams,
+    finalRankings: teams.map((tm, i) => ({ rank: i + 1, teamId: tm.id })) };
+  const rrMedals = computeTournamentMedals([rr]);
+  assertEq(rrMedals[teams[3].players[0]].participant, 1, 'rank 4 -> participant');
+  assertEq(rrMedals[teams[3].players[0]].bronze, 0, 'rank 4 -> no bronze');
+
+  // Several tournaments add up; only completed ones count.
+  const sum = computeTournamentMedals([t, rr, { ...rr, state: 'deleted' }, { ...rr, state: 'in_progress', finalRankings: null }]);
+  const champ = playersOf(1)[0];
+  assertEq(sum[champ].gold + sum[champ].silver + sum[champ].bronze + sum[champ].participant, 2,
+    'deleted / in-progress tournaments give no medals');
+
+  // The completion date decides the window (season or badge duration).
+  const later = { ...rr, completedAt: 5000 };
+  assertEq(Object.keys(computeTournamentMedals([t, later], { since: 2000 })).length, 8, 'since filters by completedAt');
+  assertEq(computeTournamentMedals([t, later], { since: 2000 })[teams[0].players[0]].gold, 1, 'only the later tournament counts');
+  assertEq(Object.keys(computeTournamentMedals([t, later], { until: 999 })).length, 0, 'until filters by completedAt');
+  assertEq(Object.keys(computeTournamentMedals(undefined)).length, 0, 'no tournaments -> no medals');
 }
 
 // ===========================================================================

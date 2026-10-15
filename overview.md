@@ -35,7 +35,7 @@ The app is production‑ready, with real‑time Firestore updates, a modular ES�
 - **1v1 + 2v2 support:** Team sizes must match; the same player can be selected twice for 1v1.
 - **Role‑based Elo:** Offense/defense Elo only updates when positions are confirmed.
 - **Ranked matches:** Matches can be flagged as ranked/unranked.
-- **Tournaments:** Structured competitions with 5 formats (single/double elimination, Swiss, round robin, double round robin). Includes bracket visualization, automatic winner cascading, match editing with cascade support, and final rankings.
+- **Tournaments:** Structured competitions with 5 formats (single/double elimination, Swiss, round robin, double round robin). Includes bracket visualization, automatic winner cascading, match editing with cascade support, and final rankings. Elo seeding uses all-time ratings; medal badges (🥇🥈🥉⚽) are derived from completed tournaments' `finalRankings` (`computeTournamentMedals`), so the completion date decides the season.
 - **Pause days:** Configurable date list to pause the app with an overlay.
 - **Pairing suggestions:** Session‑aware 2v2 suggestions using recency + waiting‑karma weighting.
 

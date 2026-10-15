@@ -1,5 +1,6 @@
 import { MAX_GOALS, STARTING_ELO, INACTIVE_THRESHOLD_DAYS, BADGE_THRESHOLDS, CAKE_TEAM, TOURNAMENT_BADGE_DURATION_DAYS } from "./constants.js";
 import { expectedScore, updateRating } from "./elo-service.js";
+import { computeTournamentMedals } from "./tournament/tournament-engine.js";
 import { rate as rateOpenSkill, rating as createOpenSkillRating, ordinal as openskillOrdinal } from "openskill";
 
 const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -400,21 +401,18 @@ export function computeAllPlayerStats(matches, options = {}) {
                 }
             }
         }
+    }
 
-        // Tournament completion: award badges to all ranked players
-        if (match.tournamentCompletion) {
-            const tc = match.tournamentCompletion;
-            const badgeCutoff = Date.now() - TOURNAMENT_BADGE_DURATION_DAYS * MILLIS_PER_DAY;
-            if (tc.completedAt >= badgeCutoff && tc.playerRankings) {
-                for (const [player, rank] of Object.entries(tc.playerRankings)) {
-                    if (!stats[player]) continue;
-                    const tb = stats[player].tournamentBadges;
-                    if (rank === 1) tb.gold++;
-                    else if (rank === 2) tb.silver++;
-                    else if (rank === 3) tb.bronze++;
-                    else tb.participant++;
-                }
-            }
+    // Tournament medals: derived from completed tournaments (options.tournaments) finished within the
+    // badge window and, when a season is selected, inside that season.
+    if (options.tournaments) {
+        const season = options.season;
+        const medals = computeTournamentMedals(options.tournaments, {
+            since: Math.max(Date.now() - TOURNAMENT_BADGE_DURATION_DAYS * MILLIS_PER_DAY, season?.start?.getTime() ?? 0),
+            until: season?.end?.getTime() ?? Infinity,
+        });
+        for (const [player, counts] of Object.entries(medals)) {
+            if (stats[player]) stats[player].tournamentBadges = counts;
         }
     }
 

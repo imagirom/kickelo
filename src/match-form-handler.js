@@ -30,6 +30,7 @@ import { getStatusBadges } from './leaderboard-display.js';
 import { createTimelineWithLabel, shownElapsed } from './match-timeline.js';
 import { loadSaved, save } from './match-restore.js';
 import { getActiveTournamentGame, setActiveTournamentGame, clearActiveTournamentGame, completeTournamentMatch, canStillPlay } from './tournament/tournament-ui.js';
+import { getVisibleTournaments } from './tournament/tournament-service.js';
 
 /**
  * Compute the emoji/badge diff between the current state and after adding a new match.
@@ -59,7 +60,7 @@ function buildEmojiDiffElement(playerNames, teamA, teamB, winner, goalsA, goalsB
 
         // Prepend synthetic match (matches are sorted newest-first)
         const matchesWithNew = [syntheticMatch, ...seasonMatches];
-        const newStatsResult = computeAllPlayerStats(matchesWithNew, { season });
+        const newStatsResult = computeAllPlayerStats(matchesWithNew, { season, tournaments: getVisibleTournaments() });
 
         // Build badge diff for each player
         const diffs = [];

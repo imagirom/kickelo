@@ -11,7 +11,7 @@ import {
   isSwissRoundComplete, getCurrentSwissRound, isTournamentComplete,
   generateTeamName, canResumeGame,
 } from './tournament-engine.js';
-import { allMatches } from '../match-data-service.js';
+import { allMatches, getAllTimeElos } from '../match-data-service.js';
 import { showToast, showConfirm } from '../toast.js';
 
 let currentView = 'list'; // 'list' | 'detail'
@@ -416,6 +416,13 @@ function bindSetupEvents(t) {
       return;
     }
 
+    // Seeding by Elo uses all-time ratings (not the selected season).
+    const playerElos = (t.config?.seedingMode || 'elo') === 'elo' ? getAllTimeElos() : {};
+    if (!playerElos) {
+      showToast('Elo ratings are not loaded yet — try again in a moment.', 'error');
+      return;
+    }
+
     const gameCount = estimateGameCount(t.teams.length, t.format, t.config);
     const approx = t.format === 'double_elim' ? '~' : '';
     const confirmed = await showConfirm(
@@ -428,7 +435,6 @@ function bindSetupEvents(t) {
     btn.disabled = true;
     btn.textContent = 'Locking...';
     try {
-      const playerElos = getPlayerElos();
       await lockTournament(t.id, playerElos);
     } catch (err) {
       showToast('Error: ' + err.message, 'error');
@@ -880,13 +886,6 @@ function getAvailablePlayers() {
     }
   }
   return Array.from(names).sort();
-}
-
-function getPlayerElos() {
-  // Build player Elo map from match data (use latest computed stats)
-  // For now, return empty — the tournament service defaults to 1500
-  // TODO: integrate with player-stats-batch for real Elo values
-  return {};
 }
 
 function populatePlayerSelect(select, players, optional = false) {
