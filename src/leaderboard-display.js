@@ -10,7 +10,7 @@ import { isDevMode } from './dev-menu.js';
 import { BETTING } from './betting/betting-config.js';
 import { getBalances } from './betting/bets-service.js';
 import { footballs } from './betting/currency.js';
-import { EMOJIS, STREAK_EMOJIS, rankPlayers, emojiValue, longestStreakValue, rarestLine, summarizeEmojiTallies, escapeHtml } from './emoji-stats.js';
+import { EMOJIS, STREAK_EMOJIS, rankPlayers, emojiValue, longestStreakValue, rarestLine, summarizeEmojiTallies, escapeHtml, pickChip } from './emoji-stats.js';
 
 let onPlayerClickCallback = null;
 let showInactivePlayers = false;  // Default: hide inactive players
@@ -609,14 +609,14 @@ function renderEmojiLeaderboard(chipsContainer) {
     const summary = summarizeEmojiTallies(visible);
 
     const choices = isStreaks ? STREAK_EMOJIS : EMOJIS.filter((emoji) => summary[emoji].total > 0);
-    const selected = choices.includes(chipPrefs[sortBy]) ? chipPrefs[sortBy] : (isStreaks ? STREAK_EMOJIS[0] : null);
+    const selected = pickChip(sortBy, chipPrefs[sortBy], choices);
     const valueOf = isStreaks ? (stats) => longestStreakValue(stats, selected) : (stats) => emojiValue(stats, selected);
     const { rows, without } = rankPlayers(visible, valueOf);
 
     if (chipsContainer) {
         const chip = (emoji, label) => {
             const info = BADGE_INFO[emoji];
-            return `<button type="button" class="leaderboard-chip${emoji === selected ? ' selected' : ''}" data-emoji="${emoji ?? ''}"
+            return `<button type="button" class="leaderboard-chip${emoji === selected ? ' selected' : ''}" data-emoji="${emoji ?? ''}" aria-pressed="${emoji === selected}"
                 ${info ? `title="${escapeHtml(info.name)}"` : ''}>${label ?? emoji}</button>`;
         };
         const info = BADGE_INFO[selected];
@@ -624,11 +624,14 @@ function renderEmojiLeaderboard(chipsContainer) {
             ? `${selected} ${info.name}: longest run in the season, shorter ones included. ${info.rule}`
             : info ? `${selected} ${info.name}: ${info.rule}` : 'All emojis earned in the season (points badges count their points). Tap one to rank by it.';
         const rarest = isStreaks ? '' : rarestLine(summary);
+        // Rebuilding destroys the focused chip (click, live update): put focus back on the same emoji
+        const focused = chipsContainer.contains(document.activeElement) ? document.activeElement.dataset.emoji : undefined;
         chipsContainer.innerHTML = `
             ${rarest ? `<p class="leaderboard-chip-note">${escapeHtml(rarest)}</p>` : ''}
             <div class="leaderboard-chip-row">${isStreaks ? '' : chip(null, 'All')}${choices.map((emoji) => chip(emoji)).join('')}</div>
             <p class="leaderboard-chip-note">${escapeHtml(caption)}</p>`;
         chipsContainer.hidden = false;
+        if (focused !== undefined) chipsContainer.querySelector(`.leaderboard-chip[data-emoji="${focused}"]`)?.focus();
         chipsContainer.querySelectorAll('.leaderboard-chip').forEach((button) => {
             button.addEventListener('click', () => {
                 const emoji = button.dataset.emoji || null;
@@ -640,6 +643,13 @@ function renderEmojiLeaderboard(chipsContainer) {
         });
     }
 
+    leaderboardList.classList.add('emoji-view');
+    if (Object.keys(visible).length === 0) {
+        leaderboardList.innerHTML = showInactivePlayers
+            ? '<li>No players found for this season.</li>'
+            : '<li>No active players found for this season.</li>';
+        return;
+    }
     if (rows.length === 0) {
         leaderboardList.innerHTML = `<li>No ${isStreaks ? 'streaks' : 'emojis'} in this season yet.</li>`;
         return;
@@ -671,6 +681,7 @@ function renderEmojiLeaderboard(chipsContainer) {
 // The main function to render the leaderboard from the local 'allPlayers' array
 async function updateLeaderboardDisplay() {
     leaderboardList.innerHTML = "";
+    leaderboardList.classList.remove('emoji-view');
     const leaderboardChips = document.getElementById('leaderboardChips');
     if (leaderboardChips) leaderboardChips.hidden = true;
 

@@ -1,7 +1,7 @@
 // Emoji tally (stats.emojiTally): every badge earned in the given matches, counted per the
 // rules in status-emojis.md and respecting each badge's introducedAt.
 import { computeAllPlayerStats } from '../src/player-stats-batch.js';
-import { summarizeEmojiTallies, rarestFirst, rankPlayers, emojiValue, emojiTotal, longestStreakValue, rarestLine, STREAK_EMOJIS } from '../src/emoji-stats.js';
+import { summarizeEmojiTallies, rarestFirst, rankPlayers, emojiValue, emojiTotal, longestStreakValue, rarestLine, STREAK_EMOJIS, pickChip } from '../src/emoji-stats.js';
 
 const SECOND = 1000;
 const at = (month, day, hour = 12) => new Date(2026, month - 1, day, hour).getTime();
@@ -106,5 +106,9 @@ const tiny = summarizeEmojiTallies({
 });
 check('rarest line: rarest first, single holder named', rarestLine(tiny), 'Rarest: 🧊 ×1 (Anna) · 🐢 ×2 · 🔥 ×5 (Ben)');
 check('rarest line: nothing earned -> empty', rarestLine(summarizeEmojiTallies({})), '');
+check('pickChip: saved emoji offered this season is kept', pickChip('emojis', '🐢', ['🔥', '🐢']), '🐢');
+check('pickChip: saved emoji nobody has this season -> All', pickChip('emojis', '🧊', ['🔥', '🐢']), null);
+check('pickChip: unknown/missing streak emoji -> 🔥', [pickChip('streaks', '🪃', STREAK_EMOJIS), pickChip('streaks', undefined, STREAK_EMOJIS)], ['🔥', '🔥']);
+check('pickChip: saved streak emoji kept', pickChip('streaks', '🪴', STREAK_EMOJIS), '🪴');
 
 console.log(`\nEmoji tally tests: ${passed} passed`);

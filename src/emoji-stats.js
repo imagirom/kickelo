@@ -23,6 +23,13 @@ export function rankPlayers(statsByPlayer, valueOf) {
     return { rows: ranked, without: rows.length - ranked.length };
 }
 
+/**
+ * The chip shown as selected: the saved one if it is a choice this season, else the view's default
+ * (All = null for "emojis", 🔥 for "streaks"). The saved preference itself is left untouched.
+ */
+export const pickChip = (view, saved, choices) =>
+    (choices.includes(saved) ? saved : view === 'streaks' ? STREAK_EMOJIS[0] : null);
+
 /** Value for the "Emojis" view: the count of one emoji, or the total when emoji is null. */
 export const emojiValue = (stats, emoji) => (emoji ? stats?.emojiTally?.[emoji]?.count : emojiTotal(stats?.emojiTally));
 

@@ -478,6 +478,24 @@ button:hover {
   align-items: center;
 }
 
+/* Emojis / Longest streaks views: many badges with big counts wrap instead of squeezing the name */
+.emoji-view .leaderboard-player-info {
+  flex-shrink: 0;
+  max-width: 45%;
+}
+
+.emoji-view .leaderboard-indicators {
+  flex-shrink: 1;
+  min-width: 0;
+  margin-left: 8px;
+}
+
+.emoji-view .leaderboard-badges {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 2px;
+}
+
 .leaderboard-badge {
   display: inline-flex;
   align-items: baseline;
